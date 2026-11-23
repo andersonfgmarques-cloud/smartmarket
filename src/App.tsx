@@ -18,7 +18,8 @@ function App() {
   const [quantity, setQuantity] = useState("1");
   const [price, setPrice] = useState("");
   const [budgetInput, setBudgetInput] = useState("");
-  const [search, setSearch] = useState("");\n  const [showFavorites, setShowFavorites] = useState(false);
+  const [search, setSearch] = useState("");
+  const [showFavorites, setShowFavorites] = useState(false);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -79,7 +80,8 @@ function App() {
     if (value !== null) setState((current) => ({ ...current, budget: value }));
   };
   const toggleItem = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, checked: !item.checked } : item) }));
-  const removeItem = (id: string) => setState((current) => ({ ...current, items: current.items.filter((item) => item.id !== id) }));\n  const toggleFavorite = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item) }));
+  const removeItem = (id: string) => setState((current) => ({ ...current, items: current.items.filter((item) => item.id !== id) }));
+  const toggleFavorite = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item) }));
   const formatItem = (item: ShoppingItem) => {
     const unit = item.measure === "un" ? "un." : item.measure;
     return `${item.quantity.toLocaleString("pt-BR")} ${unit} × ${formatBRL(Math.round(item.unitPrice * 100))}`;
