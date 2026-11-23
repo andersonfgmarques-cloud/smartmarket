@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, ShoppingBasket, ShoppingCart, SlidersHorizontal, Wallet, X, ScanLine } from "lucide-react";
+import { ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, ShoppingBasket, ShoppingCart, SlidersHorizontal, Wallet, X, ScanLine, FileDown } from "lucide-react";
 import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
 import type { PurchaseRecord, ShoppingState } from "./types";
@@ -20,6 +20,7 @@ function App() {
   const [ocrPreview, setOcrPreview] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [scanQuantity, setScanQuantity] = useState("1");
+  const [listModal, setListModal] = useState<"purchased" | "scanned" | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -243,6 +244,31 @@ function App() {
   };
 
   const boughtCount = state.items.filter((item) => item.checked).length;
+  const modalItems = listModal === "purchased" ? state.items.filter((item) => item.checked) : state.items;
+
+  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char] || char);
+
+  const exportListPdf = () => {
+    if (!listModal) return;
+    const title = listModal === "purchased" ? "Itens comprados" : "Produtos escaneados";
+    const items = modalItems;
+    const totalCents = items.reduce((sum, item) => sum + calculateSubtotal(item.unitPrice, item.quantity, item.measure), 0);
+    const rows = items.map((item) => {
+      const subtotal = calculateSubtotal(item.unitPrice, item.quantity, item.measure);
+      return `<tr><td>${escapeHtml(item.name)}</td><td>${item.quantity.toLocaleString("pt-BR")} ${escapeHtml(item.measure)}</td><td>${formatBRL(Math.round(item.unitPrice * 100))}</td><td>${formatBRL(subtotal)}</td></tr>`;
+    }).join("");
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setNotice("O navegador bloqueou a janela do PDF. Permita pop-ups para o SmartMarket e tente novamente.");
+      return;
+    }
+    printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} - SmartMarket</title><style>
+      body{font-family:Arial,sans-serif;color:#1f2d25;margin:28px}h1{font-size:22px;margin:0 0 6px;color:#087443}.sub{color:#65736a;font-size:12px;margin-bottom:22px}.brand{font-weight:bold;color:#087443;margin-bottom:26px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;border-bottom:1px solid #dce6df;text-align:left}th{background:#edf6f0;color:#315b43}.total{margin-top:18px;text-align:right;font-size:16px;font-weight:bold}.foot{margin-top:30px;color:#89948d;font-size:10px}@media print{body{margin:14mm}}
+      </style></head><body><div class="brand">SmartMarket</div><h1>${title}</h1><div class="sub">Gerado em ${new Date().toLocaleString("pt-BR")} · ${items.length} produto(s)</div><table><thead><tr><th>Produto</th><th>Quantidade</th><th>Preço unitário</th><th>Subtotal</th></tr></thead><tbody>${rows || '<tr><td colspan="4">Nenhum produto nesta lista.</td></tr>'}</tbody></table><div class="total">Total: ${formatBRL(totalCents)}</div><div class="foot">Documento gerado pelo SmartMarket.</div><script>window.onload=()=>window.print()<\/script></body></html>`);
+    printWindow.document.close();
+  };
 
   if (!ready) return <main className="loading">Preparando seu SmartMarket…</main>;
 
@@ -269,8 +295,8 @@ function App() {
         </section>
 
         <section className="stats-grid">
-          <article className="stat-card"><div className="stat-top"><span>Total comprado</span><span className="stat-icon green"><Wallet size={18}/></span></div><strong>{formatBRL(totals.cents)}</strong><small><ArrowUpRight size={13}/> Total calculado dos produtos</small></article>
-          <article className="stat-card"><div className="stat-top"><span>Produtos escaneados</span><span className="stat-icon blue"><ShoppingBasket size={18}/></span></div><strong>{String(state.items.length).padStart(2, "0")} <em>itens</em></strong><small>Registrados durante esta compra</small></article>
+          <button type="button" className="stat-card stat-card-button" onClick={() => setListModal("purchased")} aria-label="Abrir lista de itens comprados"><div className="stat-top"><span>Total comprado</span><span className="stat-icon green"><Wallet size={18}/></span></div><strong>{formatBRL(totals.purchased)}</strong><small><ArrowUpRight size={13}/> {boughtCount} itens comprados · Ver lista</small></button>
+          <button type="button" className="stat-card stat-card-button" onClick={() => setListModal("scanned")} aria-label="Abrir lista de produtos escaneados"><div className="stat-top"><span>Produtos escaneados</span><span className="stat-icon blue"><ShoppingBasket size={18}/></span></div><strong>{String(state.items.length).padStart(2, "0")} <em>itens</em></strong><small>Registrados durante esta compra · Ver lista</small></button>
           <article className="stat-card"><div className="stat-top"><span>Orçamento disponível</span><span className="stat-icon orange"><Wallet size={18}/></span></div><strong>{state.budget ? formatBRL(totals.remaining) : "Definir"}</strong><small>{state.budget ? `Limite de ${formatBRL(state.budget * 100)}` : "Configure seu limite de gastos"}</small></article>
         </section>
 
@@ -305,6 +331,7 @@ function App() {
         <footer className="footer"><span>SmartMarket · Compras inteligentes</span><span><span className="online-dot"/> Armazenamento neste aparelho</span></footer>
       </main>
 
+      {listModal && <div className="modal-backdrop list-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setListModal(null); }}><section className="modal list-modal" role="dialog" aria-modal="true" aria-labelledby="list-modal-title"><div className="modal-heading"><div><p className="eyebrow">SMARTMARKET · SUA COMPRA</p><h2 id="list-modal-title">{listModal === "purchased" ? "Itens comprados" : "Produtos escaneados"}</h2><p className="muted">{modalItems.length} produto(s) na lista</p></div><button className="icon-button" onClick={() => setListModal(null)} aria-label="Fechar lista"><X/></button></div>{modalItems.length === 0 ? <div className="empty-state"><h4>Nenhum item nesta lista</h4><p>Os produtos aparecerão aqui após serem registrados.</p></div> : <div className="list-modal-items">{modalItems.map((item) => <div className="product-row" key={item.id}><div className="product-info"><strong>{item.name}</strong><span>{item.quantity.toLocaleString("pt-BR")} {item.measure} × {formatBRL(Math.round(item.unitPrice * 100))}</span></div><div className="product-price"><strong>{formatBRL(calculateSubtotal(item.unitPrice, item.quantity, item.measure))}</strong><small>subtotal</small></div></div>)}</div>}<div className="list-modal-total"><span>Total da lista</span><strong>{formatBRL(modalItems.reduce((sum, item) => sum + calculateSubtotal(item.unitPrice, item.quantity, item.measure), 0))}</strong></div><div className="modal-actions"><button type="button" className="outline-button" onClick={() => setListModal(null)}>Fechar</button><button type="button" className="primary-button" onClick={exportListPdf}><FileDown size={17}/> Gerar PDF</button></div></section></div>}
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Fechar aviso"><X size={16}/></button></div>}
       {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">{scannerStep === "barcode" ? "Escanear produto" : "Ler etiqueta do produto"}</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">{cameraReady ? (scannerStep === "barcode" ? "Aponte para o código de barras da embalagem ou escolha ler somente a etiqueta." : (scannedProductName ? "Produto: " + scannedProductName + ". Aponte para a etiqueta com o preço." : "Enquadre a etiqueta inteira. O aplicativo tentará reconhecer o nome e o preço.")) : "Iniciando câmera traseira..."}</p><div className="scanner-status">{scanResult?.price ? "Preço detectado" : aiBusy ? "Analisando a imagem com IA (limite de 45 segundos)..." : scanning ? (scannerStep === "barcode" ? "Procurando código de barras..." : "Etiqueta pronta para análise.") : "Preparando leitura automática..."}</div><p className="form-hint">{scannerStep === "barcode" ? "Aponte para o código de barras da embalagem." : "Aponte para a etiqueta inteira, com nome e preço nítidos. A leitura é automática."}</p>{scannerStep === "price" && <div className="ocr-debug"><strong>{ocrPreview ? "Resultado da análise:" : "Leitura inteligente:"}</strong><span>{ocrPreview || "Enquadre a etiqueta e toque em analisar. O Gemini tentará identificar o produto e o preço."}</span></div>}{scannerStep === "barcode" && <button type="button" className="text-button" onClick={() => { setScannedProductName(""); setScanResult(null); setScannerStep("price"); }}>Ler somente a etiqueta de preço</button>}{scannerStep === "price" && !scanResult?.price && <button type="button" className="primary-button" disabled={!cameraReady || aiBusy} onClick={analyzeLabel}><Camera size={17}/>{aiBusy ? "Analisando com Gemini..." : "Analisar etiqueta com IA"}</button>}{scanResult && scanResult.price > 0 && <div className="scan-result"><strong>Produto e preço identificados</strong><label className="scan-name-label">Produto identificado<input aria-label="Nome do produto identificado" value={scannedProductName} onChange={(event) => setScannedProductName(event.target.value)} placeholder="Digite o nome se a etiqueta não identificar"/></label><label className="scan-name-label">Preço por unidade (R$)<input aria-label="Preço unitário" inputMode="decimal" value={String(scanResult.price).replace(".", ",")} onChange={(event) => { const value = parseBRLAmount(event.target.value); if (value !== null) setScanResult((current) => current ? { ...current, price: value } : current); }}/></label><label className="scan-name-label">Quantidade desejada<input aria-label="Quantidade desejada" type="number" min="0.001" step="any" inputMode="decimal" value={scanQuantity} onChange={(event) => setScanQuantity(event.target.value)}/></label><div className="scan-subtotal"><span>Subtotal da compra</span><b>{formatBRL(Math.round(scanResult.price * Math.max(Number(scanQuantity.replace(",", ".")) || 0, 0) * 100))}</b></div><small>Confira o produto, o preço unitário e a quantidade. A soma será lançada no orçamento ao confirmar.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult && scanResult.price > 0 ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Adicionar à compra</button> : <button type="button" className="primary-button" disabled><Camera size={17}/>{scanning ? "Leitura automática ativa" : "Aguardando câmera"}</button>}</div></section></div>}
 
