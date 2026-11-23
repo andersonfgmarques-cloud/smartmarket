@@ -39,7 +39,6 @@ function App() {
     const value = parseBRLAmount(budgetInput);
     if (value !== null) setState((current) => ({ ...current, budget: value }));
   };
-  const removeItem = (id: string) => setState((current) => ({ ...current, items: current.items.filter((item) => item.id !== id) }));
   const finalizePurchase = () => {
     const purchasedItems = state.items.filter((item) => item.checked);
     if (purchasedItems.length === 0) {
