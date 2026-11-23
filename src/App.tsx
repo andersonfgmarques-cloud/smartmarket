@@ -183,7 +183,7 @@ function App() {
             if (context) {
               context.filter = "contrast(1.35) brightness(1.08)";
               context.drawImage(video, 0, 0, canvas.width, canvas.height);
-              const result = await (await import("tesseract.js")).createWorker === undefined ? Promise.resolve({ data: { text: "" } }) : worker.recognize(canvas);
+              const result = await worker.recognize(canvas);
               if (cancelled) break;
               const recognized = result.data.text;
               const normalized = recognized.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1");
