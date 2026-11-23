@@ -201,22 +201,38 @@ function App() {
       context.putImageData(frame, 0, 0);
       const result = await ocrWorkerRef.current.recognize(canvas);
       const text = result.data.text || "";
-      setOcrPreview(text.trim() ? "Texto reconhecido:\\n" + text.trim().slice(0, 450) : "Nenhum texto nítido foi reconhecido. Aproxime a câmera e mantenha a etiqueta parada.");
-      const matches = [...text.matchAll(/(?:R\\$\\s*)?\\d{1,3}(?:\\.\\d{3})*,\\d{2}|(?:R\\$\\s*)?\\d+,\\d{2}/gi)]
-        .map((match) => parseBRLAmount(match[0].replace(/^R\\$\\s*/i, "").trim()))
-        .filter((value): value is number => value !== null && value > 0 && value < 100000);
-      const prices = [...new Set(matches)];
+      const rawText = text.trim();
+      const normalizeOcrDigits = (value: string) => value
+        .replace(/[OoQ]/g, "0")
+        .replace(/[Il|]/g, "1")
+        .replace(/[Ss]/g, "5");
+      const pricePattern = /(?:R\\$\\s*)?([0-9OoQIl|Ss]{1,3}(?:\\.[0-9OoQIl|Ss]{3})*,[0-9OoQIl|Ss]{2}|[0-9OoQIl|Ss]+,[0-9OoQIl|Ss]{2})/gi;
+      const candidates = [...rawText.matchAll(pricePattern)].map((match) => {
+        const normalized = normalizeOcrDigits(match[1]);
+        return { value: parseBRLAmount(normalized), hasCurrency: /^R\\$\\s*/i.test(match[0]) };
+      }).filter((candidate): candidate is { value: number; hasCurrency: boolean } =>
+        candidate.value !== null && candidate.value > 0 && candidate.value < 100000
+      );
+      const currencyPrices = [...new Set(candidates.filter((item) => item.hasCurrency).map((item) => item.value))];
+      const allPrices = [...new Set(candidates.map((item) => item.value))];
+      const prices = currencyPrices.length ? currencyPrices : allPrices;
       if (prices.length === 0) {
-        setNotice("Não identifiquei um preço válido. Aproxime a câmera, evite reflexos e tente novamente.");
+        setOcrPreview("Não encontrei um valor monetário legível na imagem.");
+        setNotice("Não identifiquei um preço válido. A etiqueta precisa estar inteira, próxima e nítida.");
         return;
       }
-      const lines = text.split(/\\r?\\n/)
-        .map((line) => line.replace(/(?:R\\$\\s*)?\\d{1,3}(?:\\.\\d{3})*,\\d{2}|(?:R\\$\\s*)?\\d+,\\d{2}/gi, "").replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
+      if (prices.length > 1) {
+        setOcrPreview("Encontrei mais de um valor possível. Aproxime o preço principal e tente novamente para evitar registrar o valor errado.");
+        setNotice("A etiqueta apresentou mais de um preço possível. Centralize o preço de venda e tente novamente.");
+        return;
+      }
+      const lines = rawText.split(/\\r?\\n/)
+        .map((line) => line.replace(pricePattern, "").replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
         .filter((line) => line.length >= 4 && /[A-Za-zÀ-ÿ]/.test(line));
       const detectedName = lines.sort((a, b) => b.length - a.length)[0] || scannedProductName;
       setScannedProductName(detectedName);
-      setScanResult({ name: detectedName, price: prices.sort((a, b) => a - b)[0] });
-      setOcrPreview("Leitura local concluída · confiança do OCR: " + Math.round(result.data.confidence || 0) + "%");
+      setScanResult({ name: detectedName, price: prices[0] });
+      setOcrPreview("Preço reconhecido localmente · OCR " + Math.round(result.data.confidence || 0) + "% · confira antes de adicionar.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       setNotice(message || "Não foi possível iniciar a leitura local. Na primeira utilização, o idioma português precisa ser baixado.");
