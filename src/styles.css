@@ -24,3 +24,79 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .scan-subtotal{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#e7f5ec;border-radius:8px;color:#315b43;font-size:12px}.scan-subtotal b{font:800 20px Manrope,sans-serif;color:#087443}.scan-result .scan-name-label input{margin-top:1px}
 
 .ocr-debug{display:grid;gap:5px;padding:10px 12px;border:1px solid #d7e5dc;border-radius:9px;background:#f5faf7;color:#315b43;font-size:12px;overflow-wrap:anywhere}.ocr-debug span{color:#52675b;font-weight:500}
+
+/* Mobile scanner modal: fit the viewport and scroll its content independently. */
+@media (max-width: 520px) {
+  .modal-backdrop:has(.scanner-modal) {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: max(10px, env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .scanner-modal {
+    width: 100%;
+    max-width: 520px;
+    max-height: calc(100vh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    margin: 0;
+  }
+
+  .scanner-modal .modal-heading {
+    position: sticky;
+    top: -16px;
+    z-index: 2;
+    background: #fff;
+    padding: 4px 0 10px;
+    margin: -4px 0 12px;
+  }
+
+  .scanner-modal .modal-heading h2 {
+    font-size: clamp(18px, 5vw, 21px);
+    line-height: 1.2;
+  }
+
+  .scanner-modal .scanner-video {
+    width: 100%;
+    height: min(34dvh, 260px);
+    min-height: 145px;
+    max-height: 260px;
+    object-fit: cover;
+  }
+
+  .scanner-modal .scan-result {
+    min-width: 0;
+  }
+
+  .scanner-modal .scan-name-label input {
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .scanner-modal .modal-actions {
+    position: sticky;
+    bottom: -16px;
+    z-index: 2;
+    background: #fff;
+    padding: 10px 0 max(4px, env(safe-area-inset-bottom));
+    margin: 10px 0 -16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .scanner-modal {
+    padding: 13px;
+  }
+  .scanner-modal .scanner-video {
+    height: 30dvh;
+    min-height: 135px;
+  }
+}
