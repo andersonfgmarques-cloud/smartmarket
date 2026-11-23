@@ -1,5 +1,5 @@
 import { openDB } from "idb";
-import type { Measure, ShoppingItem, ShoppingState } from "../types";
+import type { Measure, PurchaseRecord, ShoppingItem, ShoppingState } from "../types";
 
 const DB_NAME = "smartmarket-db";
 const STORE = "app-state";
@@ -38,7 +38,7 @@ export function normalizeState(value: unknown): ShoppingState {
     ? value.budget
     : 0;
   const items = Array.isArray(value.items) ? value.items.filter(isShoppingItem) : [];
-  const purchases = Array.isArray(value.purchases) ? value.purchases.filter((entry): entry is ShoppingState["purchases"] extends (infer T)[] | undefined ? T : never => {
+  const purchases: PurchaseRecord[] = Array.isArray(value.purchases) ? value.purchases.filter((entry): entry is PurchaseRecord => {
     if (!isRecord(entry)) return false;
     return typeof entry.id === "string" && typeof entry.purchasedAt === "string" && typeof entry.totalCents === "number" && Number.isFinite(entry.totalCents) && Array.isArray(entry.items) && entry.items.every(isShoppingItem);
   }) : [];
