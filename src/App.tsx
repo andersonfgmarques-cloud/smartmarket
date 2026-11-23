@@ -175,8 +175,7 @@ function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "apikey": "sb_publishable_sT6J9fzUQfB2jPIi2-Hncg_pXevsK8O",
-          "Authorization": "Bearer sb_publishable_sT6J9fzUQfB2jPIi2-Hncg_pXevsK8O"
+          "apikey": "sb_publishable_sT6J9fzUQfB2jPIi2-Hncg_pXevsK8O"
         },
         body: JSON.stringify({ imageBase64, mimeType: "image/jpeg" })
       });
@@ -192,7 +191,7 @@ function App() {
       setScanResult({ name, price: result.price });
       setOcrPreview("Leitura por IA · confiança aproximada: " + Math.round((result.confidence || 0) * 100) + "%");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Não foi possível analisar a etiqueta.");
+      setNotice(error instanceof TypeError && error.message.toLowerCase().includes("fetch") ? "Não foi possível conectar ao serviço de leitura. Verifique a internet e tente novamente." : error instanceof Error ? error.message : "Não foi possível analisar a etiqueta.");
     } finally {
       setAiBusy(false);
     }
