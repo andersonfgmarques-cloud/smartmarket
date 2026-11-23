@@ -178,6 +178,8 @@ function App() {
     try {
       if (!ocrWorkerRef.current) {
         ocrWorkerRef.current = await createWorker("por", 1, {
+          // Modelo "fast" oficial do Tesseract: reduz o tempo de download e processamento inicial.
+          langPath: "https://tessdata.projectnaptha.com/4.0.0_fast",
           logger: (event) => {
             if (event.status === "recognizing text") setOcrPreview("Lendo etiqueta: " + Math.round(event.progress * 100) + "%");
             if (event.status === "loading language traineddata") setOcrPreview("Baixando o idioma português na primeira leitura: " + Math.round(event.progress * 100) + "%");
