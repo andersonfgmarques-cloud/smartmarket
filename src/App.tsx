@@ -164,17 +164,14 @@ function App() {
   useEffect(() => {
     if (!showScanner || !cameraReady || scanResult) return;
     let cancelled = false;
-    let worker: Awaited<ReturnType<typeof import("tesseract.js")["createWorker"]>> | null = null;
+    let terminateWorker: (() => Promise<unknown>) | undefined;
     const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const scanContinuously = async () => {
       setScanning(true);
       try {
         const { createWorker } = await import("tesseract.js");
-        worker = await createWorker("por+eng", 1);
-        await worker.setParameters({
-          tessedit_pageseg_mode: "11",
-          preserve_interword_spaces: "1",
-        });
+        const worker = await createWorker("por+eng", 1);
+        terminateWorker = () => worker.terminate();
         while (!cancelled && videoRef.current && !scanResult) {
           const video = videoRef.current;
           if (video.readyState >= 2 && video.videoWidth > 0) {
@@ -186,7 +183,7 @@ function App() {
             if (context) {
               context.filter = "contrast(1.35) brightness(1.08)";
               context.drawImage(video, 0, 0, canvas.width, canvas.height);
-              const result = await worker.recognize(canvas);
+              const result = await (await import("tesseract.js")).createWorker === undefined ? Promise.resolve({ data: { text: "" } }) : worker.recognize(canvas);
               if (cancelled) break;
               const recognized = result.data.text;
               const normalized = recognized.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1");
@@ -211,7 +208,7 @@ function App() {
       } catch (error) {
         if (!cancelled) setNotice(error instanceof Error ? error.message : "Falha ao iniciar a leitura automática.");
       } finally {
-        await worker?.terminate();
+        await terminateWorker?.();
         if (!cancelled) setScanning(false);
       }
     };
