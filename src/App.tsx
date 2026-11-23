@@ -161,7 +161,7 @@ function App() {
         const { createWorker } = await import("tesseract.js");
         const worker = await createWorker("por+eng", 1);
         terminateWorker = () => worker.terminate();
-        await worker.setParameters({ tessedit_pageseg_mode: "11", preserve_interword_spaces: "1" });
+        await worker.setParameters({ preserve_interword_spaces: "1" });
         while (!cancelled && videoRef.current) {
           const video = videoRef.current;
           if (video.readyState >= 2 && video.videoWidth > 0) {
