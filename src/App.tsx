@@ -174,13 +174,13 @@ function App() {
     setOcrPreview("");
     try {
       const canvas = document.createElement("canvas");
-      const scale = Math.min(1.25, 1440 / video.videoWidth);
+      const scale = Math.min(1, 1024 / video.videoWidth);
       canvas.width = Math.round(video.videoWidth * scale);
       canvas.height = Math.round(video.videoHeight * scale);
       const context = canvas.getContext("2d");
       if (!context) throw new Error("Não foi possível capturar a imagem da câmera.");
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.78);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.68);
       const imageBase64 = dataUrl.split(",")[1];
       const response = await fetch("https://xyhokqijijiazettmkgy.supabase.co/functions/v1/scan-label", {
         method: "POST",
