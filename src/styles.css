@@ -100,3 +100,33 @@ button:disabled{opacity:.55;cursor:not-allowed}
     min-height: 135px;
   }
 }
+
+/* Clickable dashboard summaries and responsive item-list dialog. */
+.stat-card-button {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.stat-card-button:hover,
+.stat-card-button:focus-visible {
+  border-color: #a8d8bb;
+  box-shadow: 0 5px 16px #0a75471a;
+  outline: none;
+}
+.stat-card-button:active { transform: scale(.99); }
+.list-modal { max-width: 620px; max-height: min(82vh, 760px); display: flex; flex-direction: column; overflow: hidden; }
+.list-modal .modal-heading { flex: none; margin-bottom: 10px; }
+.list-modal-items { overflow-y: auto; min-height: 0; padding-right: 3px; }
+.list-modal-total { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding: 15px 0; font-size: 13px; color: #65736a; flex: none; }
+.list-modal-total strong { font: 800 20px Manrope,sans-serif; color: #087443; }
+.list-modal .modal-actions { flex: none; padding-top: 10px; border-top: 1px solid var(--line); }
+@media(max-width:520px) {
+  .list-backdrop { align-items: flex-end; padding: 10px 10px max(10px, env(safe-area-inset-bottom)); }
+  .list-modal { width: 100%; max-height: calc(88dvh - env(safe-area-inset-bottom)); padding: 17px; border-radius: 14px; }
+  .list-modal .modal-heading h2 { font-size: 19px; }
+  .list-modal .modal-actions { display: grid; grid-template-columns: 1fr 1.4fr; }
+  .list-modal .modal-actions button { justify-content: center; }
+}
