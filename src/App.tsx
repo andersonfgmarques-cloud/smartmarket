@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, Pencil, Plus, Search, ShoppingBasket, ShoppingCart, SlidersHorizontal, Star, Trash2, Wallet, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, Pencil, Plus, Search, ShoppingBasket, ShoppingCart, SlidersHorizontal, Star, Trash2, Wallet, X, ScanLine } from "lucide-react";
 import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
 import type { Measure, PurchaseRecord, ShoppingItem, ShoppingState } from "./types";
@@ -21,6 +21,11 @@ function App() {
   const [search, setSearch] = useState("");
   const [showFavorites, setShowFavorites] = useState(false);
   const [notice, setNotice] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<{ name: string; price: number } | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     loadState().then((saved) => { setState(saved); setBudgetInput(saved.budget ? String(saved.budget) : ""); }).finally(() => setReady(true));
@@ -33,7 +38,7 @@ function App() {
   const totals = useMemo(() => {
     const cents = state.items.reduce((sum, item) => sum + calculateSubtotal(item.unitPrice, item.quantity, item.measure), 0);
     const purchased = state.items.filter((item) => item.checked).reduce((sum, item) => sum + calculateSubtotal(item.unitPrice, item.quantity, item.measure), 0);
-    return { cents, purchased, remaining: Math.max(state.budget * 100 - cents, 0) };
+    return { cents, purchased, remaining: Math.max(state.budget * 100 - purchased, 0) };
   }, [state]);
 
   const visibleItems = state.items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) && (!showFavorites || item.favorite));
@@ -60,17 +65,18 @@ function App() {
     event.preventDefault();
     const parsedPrice = parseBRLAmount(price);
     const parsedQuantity = Number(quantity.replace(",", "."));
-    if (!name.trim() || parsedPrice === null || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return;
+    if (!name.trim() || (price.trim() !== "" && parsedPrice === null) || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return;
+    const savedPrice = parsedPrice ?? 0;
     const kind = measure === "un" ? "unit" : measure === "l" || measure === "ml" ? "volume" : "weight";
     if (editingId) {
       setState((current) => ({
         ...current,
         items: current.items.map((item) => item.id === editingId
-          ? { ...item, name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: parsedPrice, updatedAt: new Date().toISOString() }
+          ? { ...item, name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: savedPrice, updatedAt: new Date().toISOString() }
           : item),
       }));
     } else {
-      const item = createItem({ name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: parsedPrice });
+      const item = createItem({ name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: savedPrice });
       setState((current) => ({ ...current, items: [item, ...current.items] }));
     }
     closeForm();
@@ -106,6 +112,88 @@ function App() {
     return `${item.quantity.toLocaleString("pt-BR")} ${unit} × ${formatBRL(Math.round(item.unitPrice * 100))}`;
   };
   const notifyScanner = () => setNotice("O leitor OCR de etiquetas será implementado na próxima etapa. Por enquanto, registre o preço manualmente.");
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  };
+  const openScanner = async () => {
+    setScanResult(null);
+    setShowScanner(true);
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Este navegador não oferece acesso à câmera.");
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch (error) {
+      setShowScanner(false);
+      setNotice(error instanceof Error ? error.message : "Não foi possível acessar a câmera. Verifique a permissão do navegador.");
+    }
+  };
+  const closeScanner = () => {
+    stopCamera();
+    setShowScanner(false);
+    setScanning(false);
+    setScanResult(null);
+  };
+  const captureLabel = async () => {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0) {
+      setNotice("A câmera ainda está sendo preparada. Tente novamente.");
+      return;
+    }
+    setScanning(true);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Não foi possível processar a imagem.");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("por+eng");
+      const result = await worker.recognize(canvas);
+      await worker.terminate();
+      const text = result.data.text;
+      const matches = [...text.matchAll(/(?:R\\s*\\$\\s*)?(\\d{1,4}(?:\\.\\d{3})*,\\d{2})/gi)];
+      const priceText = matches.at(-1)?.[1];
+      const detectedPrice = priceText ? parseBRLAmount(priceText) : null;
+      const nameLines = text.split(/\\r?\\n/).map((line) => line.replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
+        .filter((line) => line.length >= 3 && !/^(R\\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\\d+[,.]\\d{2}/.test(line));
+      const detectedName = nameLines.sort((left, right) => right.length - left.length)[0] ?? "";
+      if (detectedPrice === null) throw new Error("Não consegui identificar o preço. Aproxime a câmera da etiqueta e tente novamente.");
+      setScanResult({ name: detectedName, price: detectedPrice });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao ler a etiqueta.");
+    } finally {
+      setScanning(false);
+    }
+  };
+  const confirmScan = () => {
+    if (!scanResult) return;
+    const cleanName = scanResult.name.trim();
+    if (!cleanName) {
+      setNotice("O preço foi identificado, mas o nome não. Tente novamente enquadrando toda a etiqueta.");
+      return;
+    }
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const match = state.items.find((item) => normalize(item.name).includes(normalize(cleanName)) || normalize(cleanName).includes(normalize(item.name)));
+    const now = new Date().toISOString();
+    if (match) {
+      setState((current) => ({ ...current, items: current.items.map((item) => item.id === match.id ? { ...item, unitPrice: scanResult.price, checked: true, updatedAt: now } : item) }));
+      setNotice(match.name + ": " + formatBRL(Math.round(scanResult.price * 100)) + " registrado.");
+    } else {
+      const detected = createItem({ name: cleanName, category: "Outros", kind: "unit", measure: "un", quantity: 1, unitPrice: scanResult.price });
+      setState((current) => ({ ...current, items: [{ ...detected, checked: true }, ...current.items] }));
+      setNotice(cleanName + " foi adicionado à lista como comprado.");
+    }
+    closeScanner();
+  };
+
   const boughtCount = state.items.filter((item) => item.checked).length;
 
   if (!ready) return <main className="loading">Preparando seu SmartMarket…</main>;
@@ -150,7 +238,7 @@ function App() {
           <aside className="right-column">
             <article className="budget-panel" id="summary"><div className="section-heading"><div><h3>Meu orçamento</h3><p className="muted">Defina seu limite para esta compra.</p></div><span className="stat-icon green"><Wallet size={18}/></span></div><label className="field-label" htmlFor="budget">Limite em reais</label><div className="budget-input"><span>R$</span><input id="budget" inputMode="decimal" placeholder="Ex.: 500,00" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} onBlur={updateBudget} onKeyDown={(e) => e.key === "Enter" && updateBudget()}/><button onClick={updateBudget} aria-label="Salvar orçamento"><Check size={17}/></button></div><div className="budget-progress"><span style={{width: `${state.budget ? Math.min((totals.cents / (state.budget * 100)) * 100, 100) : 0}%`}}/></div><div className="budget-meta"><span>{state.budget ? `${Math.min((totals.cents / (state.budget * 100)) * 100, 100).toFixed(0)}% utilizado` : "Orçamento não definido"}</span><strong>{state.budget ? formatBRL(totals.remaining) + " restantes" : "—"}</strong></div></article>
             <article className="tip-panel"><div className="tip-icon"><CircleHelp size={18}/></div><div><strong>Dica SmartMarket</strong><p>Confira o preço na etiqueta antes de registrar. Assim seu total fica mais próximo do valor no caixa.</p></div></article>
-            <article className="scanner-panel"><div className="scanner-icon"><Camera size={19}/></div><div><strong>Leitura de etiquetas</strong><p>O scanner OCR será ativado na próxima etapa.</p><button className="text-button" onClick={notifyScanner}>Como vai funcionar <ArrowDown size={14}/></button></div></article>
+            <article className="scanner-panel"><div className="scanner-icon"><Camera size={19}/></div><div><strong>Leitura de etiquetas</strong><p>Leia o preço na prateleira com a câmera do celular.</p><button className="text-button" onClick={openScanner}><ScanLine size={14}/> Abrir leitor de preços</button></div></article>
           </aside>
         </section>
         <section className="list-panel purchase-history" id="purchase-history">
@@ -171,7 +259,8 @@ function App() {
       </main>
 
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Fechar aviso"><X size={16}/></button></div>}
-      {showForm && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closeForm(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><p className="eyebrow">SUA LISTA</p><h2 id="modal-title">{editingId ? "Editar produto" : "Adicionar produto"}</h2></div><button className="icon-button" onClick={closeForm} aria-label="Fechar"><X/></button></div><form onSubmit={addItem}><label>Nome do produto<input autoFocus required placeholder="Ex.: Arroz tipo 1" value={name} onChange={(e) => setName(e.target.value)}/></label><label>Categoria<select value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((entry) => <option key={entry}>{entry}</option>)}</select></label><div className="form-two"><label>Unidade de venda<select value={measure} onChange={(e) => setMeasure(e.target.value as Measure)}><option value="un">Unidade</option><option value="kg">Quilograma (kg)</option><option value="g">Grama (g)</option><option value="l">Litro (L)</option><option value="ml">Mililitro (ml)</option></select></label><label>{measure === "un" ? "Quantidade" : "Quantidade (" + measure + ")"}<input required type="number" min="0.001" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}/></label></div><label>Preço por {measure === "un" ? "unidade" : measure === "kg" || measure === "g" ? "kg" : "litro"} (R$)<input required inputMode="decimal" placeholder="0,00" value={price} onChange={(e) => setPrice(e.target.value)}/></label><p className="form-hint">Para produtos por grama, informe o preço por kg. Para ml, informe o preço por litro.</p><div className="modal-actions"><button type="button" className="outline-button" onClick={closeForm}>Cancelar</button><button type="submit" className="primary-button">{editingId ? <Check size={17}/> : <Plus size={17}/>} {editingId ? "Salvar alterações" : "Adicionar à lista"}</button></div></form></section></div>}
+      {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">Ler etiqueta de preço</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">Enquadre o nome do produto e o preço na etiqueta. Mantenha a câmera firme e com boa iluminação.</p>{scanResult && <div className="scan-result"><strong>Leitura identificada</strong><span>{scanResult.name || "Nome não identificado"}</span><b>{formatBRL(Math.round(scanResult.price * 100))}</b><small>Confira o resultado antes de registrar.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Confirmar compra</button> : <button type="button" className="primary-button" disabled={scanning} onClick={captureLabel}><Camera size={17}/>{scanning ? "Lendo etiqueta..." : "Capturar e identificar"}</button>}</div></section></div>}
+      {showForm && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closeForm(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><p className="eyebrow">SUA LISTA</p><h2 id="modal-title">{editingId ? "Editar produto" : "Adicionar produto"}</h2></div><button className="icon-button" onClick={closeForm} aria-label="Fechar"><X/></button></div><form onSubmit={addItem}><label>Nome do produto<input autoFocus required placeholder="Ex.: Arroz tipo 1" value={name} onChange={(e) => setName(e.target.value)}/></label><label>Categoria<select value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((entry) => <option key={entry}>{entry}</option>)}</select></label><div className="form-two"><label>Unidade de venda<select value={measure} onChange={(e) => setMeasure(e.target.value as Measure)}><option value="un">Unidade</option><option value="kg">Quilograma (kg)</option><option value="g">Grama (g)</option><option value="l">Litro (L)</option><option value="ml">Mililitro (ml)</option></select></label><label>{measure === "un" ? "Quantidade" : "Quantidade (" + measure + ")"}<input required type="number" min="0.001" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}/></label></div><p className="form-hint">O preço será identificado pela câmera durante a compra. Você pode deixar o preço em branco.</p><div className="modal-actions"><button type="button" className="outline-button" onClick={closeForm}>Cancelar</button><button type="submit" className="primary-button">{editingId ? <Check size={17}/> : <Plus size={17}/>} {editingId ? "Salvar alterações" : "Adicionar à lista"}</button></div></form></section></div>}
     </div>
   );
 }
