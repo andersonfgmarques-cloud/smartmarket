@@ -3,8 +3,9 @@ import { normalizeState } from "./storage";
 
 describe("normalização do armazenamento", () => {
   it("retorna estado vazio para dados ausentes ou inválidos", () => {
-    expect(normalizeState(null)).toEqual({ items: [], budget: 0, purchases: [] });
-    expect(normalizeState("inválido")).toEqual({ items: [], budget: 0 });
+    const emptyState = { items: [], budget: 0, purchases: [] };
+    expect(normalizeState(null)).toEqual(emptyState);
+    expect(normalizeState("inválido")).toEqual(emptyState);
   });
 
   it("preserva orçamento e itens válidos", () => {
@@ -22,6 +23,7 @@ describe("normalização do armazenamento", () => {
     expect(normalizeState({ budget: 150, items: [item] })).toEqual({
       budget: 150,
       items: [item],
+      purchases: [],
     });
   });
 
@@ -40,6 +42,7 @@ describe("normalização do armazenamento", () => {
     expect(normalizeState({ budget: -20, items: [validItem, { name: "sem id" }] })).toEqual({
       budget: 0,
       items: [validItem],
+      purchases: [],
     });
   });
 
@@ -56,5 +59,26 @@ describe("normalização do armazenamento", () => {
       updatedAt: "2026-11-23T12:00:00.000Z",
     };
     expect(normalizeState({ budget: 100, items: [invalidItem] }).items).toHaveLength(0);
+  });
+
+  it("preserva compras válidas e descarta registros corrompidos", () => {
+    const purchase = {
+      id: "purchase-1",
+      purchasedAt: "2026-11-23T12:00:00.000Z",
+      items: [{
+        id: "item-4",
+        name: "Café",
+        category: "Mercearia",
+        kind: "unit",
+        measure: "un",
+        quantity: 1,
+        unitPrice: 18.5,
+        checked: true,
+        updatedAt: "2026-11-23T12:00:00.000Z",
+      }],
+      totalCents: 1850,
+    };
+    const result = normalizeState({ budget: 100, items: [], purchases: [purchase, { id: "broken" }] });
+    expect(result.purchases).toEqual([purchase]);
   });
 });
