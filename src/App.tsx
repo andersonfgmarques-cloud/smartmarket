@@ -166,30 +166,32 @@ function App() {
           const video = videoRef.current;
           if (video.readyState >= 2 && video.videoWidth > 0) {
             const canvas = document.createElement("canvas");
-            const scale = Math.min(1.5, 1800 / video.videoWidth);
+            const scale = Math.min(2, 2200 / video.videoWidth);
             canvas.width = Math.round(video.videoWidth * scale);
             canvas.height = Math.round(video.videoHeight * scale);
             const context = canvas.getContext("2d");
             if (context) {
-              context.filter = "contrast(1.5) brightness(1.1)";
+              context.filter = "grayscale(1) contrast(1.8) brightness(1.15)";
               context.drawImage(video, 0, 0, canvas.width, canvas.height);
               const result = await worker.recognize(canvas);
               if (cancelled) break;
               const lines = result.data.text.split(/\r?\n/);
-              const priceLine = lines.find((line) => /R\s*\$/i.test(line));
-              if (priceLine) {
-                const normalized = priceLine.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1");
-                const match = normalized.match(/R\s*\$\s*(\d{1,4}(?:\.\d{3})*,\d{2})/i);
-                const price = match?.[1] ? parseBRLAmount(match[1]) : null;
-                if (price !== null && price > 0 && price < 100000) {
-                  const productLines = lines
-                    .map((line) => line.replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim())
-                    .filter((line) => line.length >= 3 && !/R\s*\$/i.test(line) && !/\d+[,.]\d{2}/.test(line) && !/^(oferta|pre[cç]o|por|kg|un|cada|unidade)/i.test(line));
-                  const labelName = scannedProductName || productLines.sort((left, right) => right.length - left.length)[0] || "";
-                  setScannedProductName(labelName);
-                  setScanResult({ name: labelName, price });
-                  break;
-                }
+              const priceCandidates = lines.map((line) => {
+                const normalized = line.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1").replace(/[Ss]/g, "5").trim();
+                const hasCurrency = /R\s*\$/i.test(normalized);
+                const match = normalized.match(/(?:R\s*\$\s*)?(\d{1,4}(?:\.\d{3})*[,.]\d{2})/i);
+                const parsed = match?.[1] ? parseBRLAmount(match[1].replace(/\./g, "").replace(",", ".")) : null;
+                return { line, parsed, hasCurrency, standalone: /^\s*(?:R\s*\$\s*)?\d{1,4}(?:[.,]\d{2})\s*$/i.test(normalized) };
+              }).filter((candidate) => candidate.parsed !== null && candidate.parsed > 0 && candidate.parsed < 100000 && (candidate.hasCurrency || candidate.standalone));
+              const bestPrice = priceCandidates[0];
+              if (bestPrice?.parsed) {
+                const productLines = lines
+                  .map((line) => line.replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim())
+                  .filter((line) => line.length >= 3 && !/R\s*\$/i.test(line) && !/\d+[,.]\d{2}/.test(line) && !/^(oferta|pre[cç]o|por|kg|un|cada|unidade)/i.test(line));
+                const labelName = scannedProductName || productLines.sort((left, right) => right.length - left.length)[0] || "";
+                setScannedProductName(labelName);
+                setScanResult({ name: labelName, price: bestPrice.parsed });
+                break;
               }
             }
           }
