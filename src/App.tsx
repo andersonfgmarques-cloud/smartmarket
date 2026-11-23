@@ -195,18 +195,18 @@ function App() {
       // Converte a moldura visível na tela para coordenadas reais do vídeo.
       // Isso mantém o OCR alinhado mesmo quando o Android entrega vídeo vertical
       // dentro da janela horizontal (object-fit: cover).
-      const frame = cameraFrameRef.current;
-      if (!frame) throw new Error("A área da câmera não está disponível.");
-      const bounds = frame.getBoundingClientRect();
-      const scale = Math.max(bounds.width / video.videoWidth, bounds.height / video.videoHeight);
-      const renderedWidth = video.videoWidth * scale;
-      const renderedHeight = video.videoHeight * scale;
+      const cameraFrameElement = cameraFrameRef.current;
+      if (!cameraFrameElement) throw new Error("A área da câmera não está disponível.");
+      const bounds = cameraFrameElement.getBoundingClientRect();
+      const displayScale = Math.max(bounds.width / video.videoWidth, bounds.height / video.videoHeight);
+      const renderedWidth = video.videoWidth * displayScale;
+      const renderedHeight = video.videoHeight * displayScale;
       const offsetX = (renderedWidth - bounds.width) / 2;
       const offsetY = (renderedHeight - bounds.height) / 2;
-      const cropX = Math.max(0, Math.round((offsetX + bounds.width * 0.08) / scale));
-      const cropY = Math.max(0, Math.round((offsetY + bounds.height * 0.24) / scale));
-      const cropWidth = Math.min(video.videoWidth - cropX, Math.round(bounds.width * 0.84 / scale));
-      const cropHeight = Math.min(video.videoHeight - cropY, Math.round(bounds.height * 0.52 / scale));
+      const cropX = Math.max(0, Math.round((offsetX + bounds.width * 0.08) / displayScale));
+      const cropY = Math.max(0, Math.round((offsetY + bounds.height * 0.24) / displayScale));
+      const cropWidth = Math.min(video.videoWidth - cropX, Math.round(bounds.width * 0.84 / displayScale));
+      const cropHeight = Math.min(video.videoHeight - cropY, Math.round(bounds.height * 0.52 / displayScale));
       const canvas = document.createElement("canvas");
       const scale = Math.min(1.5, 1500 / cropWidth);
       canvas.width = Math.round(cropWidth * scale);
