@@ -58,7 +58,6 @@ function App() {
     }));
     setNotice("Compra registrada no histórico.");
   };
-  const toggleFavorite = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item) }));
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
