@@ -75,8 +75,8 @@ function App() {
     closeForm();
   };
   const updateBudget = () => {
-    const value = Number(budgetInput.replace(",", "."));
-    if (Number.isFinite(value) && value >= 0) setState((current) => ({ ...current, budget: value }));
+    const value = parseBRLAmount(budgetInput);
+    if (value !== null) setState((current) => ({ ...current, budget: value }));
   };
   const toggleItem = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, checked: !item.checked } : item) }));
   const removeItem = (id: string) => setState((current) => ({ ...current, items: current.items.filter((item) => item.id !== id) }));
