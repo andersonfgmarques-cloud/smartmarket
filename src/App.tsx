@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, ShoppingBasket, ShoppingCart, SlidersHorizontal, Wallet, X, ScanLine } from "lucide-react";
 import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
-import type { PurchaseRecord, ShoppingItem, ShoppingState } from "./types";
+import type { PurchaseRecord, ShoppingState } from "./types";
 
 const initialState: ShoppingState = { items: [], budget: 0, purchases: [] };
 
