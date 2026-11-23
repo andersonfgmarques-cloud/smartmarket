@@ -153,6 +153,20 @@ function App() {
             <article className="scanner-panel"><div className="scanner-icon"><Camera size={19}/></div><div><strong>Leitura de etiquetas</strong><p>O scanner OCR será ativado na próxima etapa.</p><button className="text-button" onClick={notifyScanner}>Como vai funcionar <ArrowDown size={14}/></button></div></article>
           </aside>
         </section>
+        <section className="list-panel purchase-history" id="purchase-history">
+          <div className="section-heading">
+            <div><h3>Histórico de compras</h3><p className="muted">Compras finalizadas neste aparelho.</p></div>
+            <span className="item-count">{(state.purchases ?? []).length} registros</span>
+          </div>
+          {(state.purchases ?? []).length === 0
+            ? <p className="muted">Suas compras finalizadas aparecerão aqui.</p>
+            : <div className="history-list">{(state.purchases ?? []).map((purchase) => (
+              <article className="history-row" key={purchase.id}>
+                <div><strong>{new Date(purchase.purchasedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</strong><small>{purchase.items.length} produtos</small></div>
+                <strong>{formatBRL(purchase.totalCents)}</strong>
+              </article>
+            ))}</div>}
+        </section>
         <footer className="footer"><span>SmartMarket · Compras inteligentes</span><span><span className="online-dot"/> Armazenamento neste aparelho</span></footer>
       </main>
 
