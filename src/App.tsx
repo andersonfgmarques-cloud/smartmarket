@@ -26,6 +26,7 @@ function App() {
   const [cameraReady, setCameraReady] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [scanResult, setScanResult] = useState<{ name: string; price: number } | null>(null);
+  const [scanQuantity, setScanQuantity] = useState("1");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -122,6 +123,7 @@ function App() {
   };
   const openScanner = () => {
     setScanResult(null);
+    setScanQuantity("1");
     setOcrProgress(0);
     setShowScanner(true);
   };
@@ -224,20 +226,20 @@ function App() {
   const confirmScan = () => {
     if (!scanResult) return;
     const cleanName = scanResult.name.trim();
-    if (!cleanName) {
-      setNotice("O preço foi identificado, mas o nome não. Tente novamente enquadrando toda a etiqueta.");
-      return;
-    }
+    const parsedQuantity = Number(scanQuantity.replace(",", "."));
+    if (!cleanName) { setNotice("Informe o nome do produto antes de adicionar à compra."); return; }
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) { setNotice("Informe uma quantidade válida."); return; }
     const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const match = state.items.find((item) => normalize(item.name).includes(normalize(cleanName)) || normalize(cleanName).includes(normalize(item.name)));
+    const normalizedName = normalize(cleanName);
+    const match = state.items.find((item) => normalize(item.name) === normalizedName);
     const now = new Date().toISOString();
     if (match) {
-      setState((current) => ({ ...current, items: current.items.map((item) => item.id === match.id ? { ...item, unitPrice: scanResult.price, checked: true, updatedAt: now } : item) }));
-      setNotice(match.name + ": " + formatBRL(Math.round(scanResult.price * 100)) + " registrado.");
+      setState((current) => ({ ...current, items: current.items.map((item) => item.id === match.id ? { ...item, unitPrice: scanResult.price, quantity: item.quantity + parsedQuantity, checked: true, updatedAt: now } : item) }));
+      setNotice(match.name + ": +" + parsedQuantity.toLocaleString("pt-BR") + " un. · " + formatBRL(Math.round(scanResult.price * parsedQuantity * 100)) + " adicionados.");
     } else {
-      const detected = createItem({ name: cleanName, category: "Outros", kind: "unit", measure: "un", quantity: 1, unitPrice: scanResult.price });
+      const detected = createItem({ name: cleanName, category: "Outros", kind: "unit", measure: "un", quantity: parsedQuantity, unitPrice: scanResult.price });
       setState((current) => ({ ...current, items: [{ ...detected, checked: true }, ...current.items] }));
-      setNotice(cleanName + " foi adicionado à lista como comprado.");
+      setNotice(cleanName + " · " + parsedQuantity.toLocaleString("pt-BR") + " un. · " + formatBRL(Math.round(scanResult.price * parsedQuantity * 100)) + " adicionados à compra.");
     }
     closeScanner();
   };
@@ -271,7 +273,7 @@ function App() {
         <section className="stats-grid">
           <article className="stat-card"><div className="stat-top"><span>Valor da lista</span><span className="stat-icon green"><Wallet size={18}/></span></div><strong>{formatBRL(totals.cents)}</strong><small><ArrowUpRight size={13}/> Total calculado dos produtos</small></article>
           <article className="stat-card"><div className="stat-top"><span>Produtos adicionados</span><span className="stat-icon blue"><ShoppingBasket size={18}/></span></div><strong>{String(state.items.length).padStart(2, "0")} <em>itens</em></strong><small>{boughtCount} já marcados como comprados</small></article>
-          <article className="stat-card"><div className="stat-top"><span>Orçamento disponível</span><span className="stat-icon orange"><Wallet size={18}/></span></div><strong>{state.budget ? formatBRL(Math.max(state.budget * 100 - totals.cents, 0)) : "Definir"}</strong><small>{state.budget ? `Limite de ${formatBRL(state.budget * 100)}` : "Configure seu limite de gastos"}</small></article>
+          <article className="stat-card"><div className="stat-top"><span>Orçamento disponível</span><span className="stat-icon orange"><Wallet size={18}/></span></div><strong>{state.budget ? formatBRL(totals.remaining) : "Definir"}</strong><small>{state.budget ? `Limite de ${formatBRL(state.budget * 100)}` : "Configure seu limite de gastos"}</small></article>
         </section>
 
         <section className="content-grid">
@@ -286,7 +288,7 @@ function App() {
           <aside className="right-column">
             <article className="budget-panel" id="summary"><div className="section-heading"><div><h3>Meu orçamento</h3><p className="muted">Defina seu limite para esta compra.</p></div><span className="stat-icon green"><Wallet size={18}/></span></div><label className="field-label" htmlFor="budget">Limite em reais</label><div className="budget-input"><span>R$</span><input id="budget" inputMode="decimal" placeholder="Ex.: 500,00" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} onBlur={updateBudget} onKeyDown={(e) => e.key === "Enter" && updateBudget()}/><button onClick={updateBudget} aria-label="Salvar orçamento"><Check size={17}/></button></div><div className="budget-progress"><span style={{width: `${state.budget ? Math.min((totals.purchased / (state.budget * 100)) * 100, 100) : 0}%`}}/></div><div className="budget-meta"><span>{state.budget ? `${Math.min((totals.purchased / (state.budget * 100)) * 100, 100).toFixed(0)}% utilizado` : "Orçamento não definido"}</span><strong>{state.budget ? formatBRL(totals.remaining) + " restantes" : "—"}</strong></div></article>
             <article className="tip-panel"><div className="tip-icon"><CircleHelp size={18}/></div><div><strong>Dica SmartMarket</strong><p>Confira o preço na etiqueta antes de registrar. Assim seu total fica mais próximo do valor no caixa.</p></div></article>
-            <article className="scanner-panel"><div className="scanner-icon"><Camera size={19}/></div><div><strong>Leitura de etiquetas</strong><p>Leia o preço na prateleira com a câmera do celular.</p><button className="text-button" onClick={openScanner}><ScanLine size={14}/> Abrir leitor de preços</button></div></article>
+            <article className="scanner-panel"><div className="scanner-icon"><Camera size={19}/></div><div><strong>Compra por leitura</strong><p>Leia o produto e o preço, informe a quantidade e lance direto na compra.</p><button className="text-button" onClick={openScanner}><ScanLine size={14}/> Abrir leitor de preços</button></div></article>
           </aside>
         </section>
         <section className="list-panel purchase-history" id="purchase-history">
@@ -307,7 +309,7 @@ function App() {
       </main>
 
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Fechar aviso"><X size={16}/></button></div>}
-      {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">Ler etiqueta de preço</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">{cameraReady ? (scanResult ? "Etiqueta identificada automaticamente. Confira os dados antes de confirmar." : "Leitura automática ativa. Aponte para a etiqueta do produto e mantenha o preço visível.") : "Iniciando câmera traseira..."}</p><div className="scanner-status">{scanResult ? "Etiqueta detectada" : scanning ? "Procurando preço na imagem..." : "Preparando leitura automática..."}</div><p className="form-hint">Enquadre a etiqueta do mercado inteira. Evite apontar para o chão, pessoas ou embalagens sem a etiqueta de preço.</p>{scanResult && <div className="scan-result"><strong>Preço identificado</strong><label className="scan-name-label">Produto<input aria-label="Nome do produto identificado" value={scanResult.name} onChange={(event) => setScanResult((current) => current ? { ...current, name: event.target.value } : current)} placeholder="Ex.: Feijão carioca 1 kg"/></label><b>{formatBRL(Math.round(scanResult.price * 100))}</b><small>Confira ou corrija o nome antes de confirmar a compra.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Confirmar compra</button> : <button type="button" className="primary-button" disabled><Camera size={17}/>{scanning ? "Leitura automática ativa" : "Aguardando câmera"}</button>}</div></section></div>}
+      {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">Ler etiqueta de preço</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">{cameraReady ? (scanResult ? "Etiqueta identificada automaticamente. Confira os dados antes de confirmar." : "Leitura automática ativa. Aponte para a etiqueta do produto e mantenha o preço visível.") : "Iniciando câmera traseira..."}</p><div className="scanner-status">{scanResult ? "Etiqueta detectada" : scanning ? "Procurando preço na imagem..." : "Preparando leitura automática..."}</div><p className="form-hint">Enquadre a etiqueta do mercado inteira. Evite apontar para o chão, pessoas ou embalagens sem a etiqueta de preço.</p>{scanResult && <div className="scan-result"><strong>Produto e preço identificados</strong><label className="scan-name-label">Nome do produto<input aria-label="Nome do produto identificado" value={scanResult.name} onChange={(event) => setScanResult((current) => current ? { ...current, name: event.target.value } : current)} placeholder="Ex.: Café 500 g"/></label><label className="scan-name-label">Preço por unidade (R$)<input aria-label="Preço unitário" inputMode="decimal" value={String(scanResult.price).replace(".", ",")} onChange={(event) => { const value = parseBRLAmount(event.target.value); if (value !== null) setScanResult((current) => current ? { ...current, price: value } : current); }}/></label><label className="scan-name-label">Quantidade desejada<input aria-label="Quantidade desejada" type="number" min="0.001" step="any" inputMode="decimal" value={scanQuantity} onChange={(event) => setScanQuantity(event.target.value)}/></label><div className="scan-subtotal"><span>Subtotal da compra</span><b>{formatBRL(Math.round(scanResult.price * Math.max(Number(scanQuantity.replace(",", ".")) || 0, 0) * 100))}</b></div><small>Confira o produto, o preço unitário e a quantidade. A soma será lançada no orçamento ao confirmar.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Confirmar compra</button> : <button type="button" className="primary-button" disabled><Camera size={17}/>{scanning ? "Leitura automática ativa" : "Aguardando câmera"}</button>}</div></section></div>}
       {showForm && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closeForm(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><p className="eyebrow">SUA LISTA</p><h2 id="modal-title">{editingId ? "Editar produto" : "Adicionar produto"}</h2></div><button className="icon-button" onClick={closeForm} aria-label="Fechar"><X/></button></div><form onSubmit={addItem}><label>Nome do produto<input autoFocus required placeholder="Ex.: Arroz tipo 1" value={name} onChange={(e) => setName(e.target.value)}/></label><label>Categoria<select value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((entry) => <option key={entry}>{entry}</option>)}</select></label><div className="form-two"><label>Unidade de venda<select value={measure} onChange={(e) => setMeasure(e.target.value as Measure)}><option value="un">Unidade</option><option value="kg">Quilograma (kg)</option><option value="g">Grama (g)</option><option value="l">Litro (L)</option><option value="ml">Mililitro (ml)</option></select></label><label>{measure === "un" ? "Quantidade" : "Quantidade (" + measure + ")"}<input required type="number" min="0.001" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}/></label></div><p className="form-hint">O preço será identificado pela câmera durante a compra. Você pode deixar o preço em branco.</p><div className="modal-actions"><button type="button" className="outline-button" onClick={closeForm}>Cancelar</button><button type="submit" className="primary-button">{editingId ? <Check size={17}/> : <Plus size={17}/>} {editingId ? "Salvar alterações" : "Adicionar à lista"}</button></div></form></section></div>}
     </div>
   );
