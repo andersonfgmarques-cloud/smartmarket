@@ -3,6 +3,7 @@ import { ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, Shopping
 import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
 import type { PurchaseRecord, ShoppingState } from "./types";
+import { createWorker } from "tesseract.js";
 
 const initialState: ShoppingState = { items: [], budget: 0, purchases: [] };
 
@@ -23,6 +24,7 @@ function App() {
   const [listModal, setListModal] = useState<"purchased" | "scanned" | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const ocrWorkerRef = useRef<Awaited<ReturnType<typeof createWorker>> | null>(null);
 
   useEffect(() => {
     loadState().then((saved) => { setState(saved); setBudgetInput(saved.budget ? String(saved.budget) : ""); }).finally(() => setReady(true));
@@ -171,50 +173,59 @@ function App() {
       return;
     }
     setAiBusy(true);
-    setOcrPreview("");
+    setOcrPreview("Preparando o leitor gratuito no próprio aparelho...");
     try {
+      if (!ocrWorkerRef.current) {
+        ocrWorkerRef.current = await createWorker("por", 1, {
+          logger: (event) => {
+            if (event.status === "recognizing text") setOcrPreview("Lendo etiqueta: " + Math.round(event.progress * 100) + "%");
+            if (event.status === "loading language traineddata") setOcrPreview("Preparando idioma português: " + Math.round(event.progress * 100) + "%");
+          },
+        });
+      }
       const canvas = document.createElement("canvas");
-      const scale = Math.min(1, 1024 / video.videoWidth);
+      const scale = Math.min(1, 1400 / video.videoWidth);
       canvas.width = Math.round(video.videoWidth * scale);
       canvas.height = Math.round(video.videoHeight * scale);
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Não foi possível capturar a imagem da câmera.");
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("Não foi possível preparar a imagem da etiqueta.");
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.68);
-      const imageBase64 = dataUrl.split(",")[1];
-      const response = await fetch("https://xyhokqijijiazettmkgy.supabase.co/functions/v1/scan-label", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": "sb_publishable_sT6J9fzUQfB2jPIi2-Hncg_pXevsK8O"
-        },
-        body: JSON.stringify({ imageBase64, mimeType: "image/jpeg" }),
-        signal: AbortSignal.timeout(45000)
-      });
-      const result = await response.json() as { productName?: string | null; price?: number | null; confidence?: number; notes?: string | null; error?: string };
-      if (!response.ok) throw new Error(result.error || "Falha ao analisar a etiqueta.");
-      if (!result.price || result.price <= 0) {
-        setOcrPreview(result.notes || "Não consegui identificar o preço com segurança. Ajuste o enquadramento e tente novamente.");
-        setNotice("A IA não conseguiu confirmar o preço. Aproxime a câmera e tente outra vez.");
+      const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < frame.data.length; i += 4) {
+        const gray = Math.round(frame.data[i] * 0.299 + frame.data[i + 1] * 0.587 + frame.data[i + 2] * 0.114);
+        const enhanced = gray > 165 ? 255 : gray < 95 ? 0 : Math.round((gray - 95) * 3.64);
+        frame.data[i] = enhanced;
+        frame.data[i + 1] = enhanced;
+        frame.data[i + 2] = enhanced;
+      }
+      context.putImageData(frame, 0, 0);
+      const result = await ocrWorkerRef.current.recognize(canvas);
+      const text = result.data.text || "";
+      setOcrPreview(text.trim() ? "Texto reconhecido:\\n" + text.trim().slice(0, 450) : "Nenhum texto nítido foi reconhecido. Aproxime a câmera e mantenha a etiqueta parada.");
+      const matches = [...text.matchAll(/(?:R\\$\\s*)?\\d{1,3}(?:\\.\\d{3})*,\\d{2}|(?:R\\$\\s*)?\\d+,\\d{2}/gi)]
+        .map((match) => parseBRLAmount(match[0].replace(/^R\\$\\s*/i, "").trim()))
+        .filter((value): value is number => value !== null && value > 0 && value < 100000);
+      const prices = [...new Set(matches)];
+      if (prices.length === 0) {
+        setNotice("Não identifiquei um preço válido. Aproxime a câmera, evite reflexos e tente novamente.");
         return;
       }
-      const name = result.productName?.trim() || scannedProductName;
-      setScannedProductName(name);
-      setScanResult({ name, price: result.price });
-      setOcrPreview("Leitura por IA · confiança aproximada: " + Math.round((result.confidence || 0) * 100) + "%");
+      const lines = text.split(/\\r?\\n/)
+        .map((line) => line.replace(/(?:R\\$\\s*)?\\d{1,3}(?:\\.\\d{3})*,\\d{2}|(?:R\\$\\s*)?\\d+,\\d{2}/gi, "").replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
+        .filter((line) => line.length >= 4 && /[A-Za-zÀ-ÿ]/.test(line));
+      const detectedName = lines.sort((a, b) => b.length - a.length)[0] || scannedProductName;
+      setScannedProductName(detectedName);
+      setScanResult({ name: detectedName, price: prices.sort((a, b) => a - b)[0] });
+      setOcrPreview("Leitura local concluída · confiança do OCR: " + Math.round(result.data.confidence || 0) + "%");
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      setNotice(error instanceof DOMException && error.name === "TimeoutError"
-        ? "A leitura excedeu 45 segundos. Tente novamente com a etiqueta mais próxima e nítida."
-        : error instanceof TypeError && message.toLowerCase().includes("fetch")
-          ? "Não foi possível conectar ao serviço de leitura. Verifique a internet e tente novamente."
-          : message || "Não foi possível analisar a etiqueta.");
+      setNotice(message || "Não foi possível iniciar a leitura local. Na primeira utilização, o idioma português precisa ser baixado.");
     } finally {
       setAiBusy(false);
     }
   };
 
-  const closeScanner = () => {
+    const closeScanner = () => {
     stopCamera();
     setShowScanner(false);
     setScanning(false);
@@ -333,7 +344,7 @@ function App() {
 
       {listModal && <div className="modal-backdrop list-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setListModal(null); }}><section className="modal list-modal" role="dialog" aria-modal="true" aria-labelledby="list-modal-title"><div className="modal-heading"><div><p className="eyebrow">SMARTMARKET · SUA COMPRA</p><h2 id="list-modal-title">{listModal === "purchased" ? "Itens comprados" : "Produtos escaneados"}</h2><p className="muted">{modalItems.length} produto(s) na lista</p></div><button className="icon-button" onClick={() => setListModal(null)} aria-label="Fechar lista"><X/></button></div>{modalItems.length === 0 ? <div className="empty-state"><h4>Nenhum item nesta lista</h4><p>Os produtos aparecerão aqui após serem registrados.</p></div> : <div className="list-modal-items">{modalItems.map((item) => <div className="product-row" key={item.id}><div className="product-info"><strong>{item.name}</strong><span>{item.quantity.toLocaleString("pt-BR")} {item.measure} × {formatBRL(Math.round(item.unitPrice * 100))}</span></div><div className="product-price"><strong>{formatBRL(calculateSubtotal(item.unitPrice, item.quantity, item.measure))}</strong><small>subtotal</small></div></div>)}</div>}<div className="list-modal-total"><span>Total da lista</span><strong>{formatBRL(modalItems.reduce((sum, item) => sum + calculateSubtotal(item.unitPrice, item.quantity, item.measure), 0))}</strong></div><div className="modal-actions"><button type="button" className="outline-button" onClick={() => setListModal(null)}>Fechar</button><button type="button" className="primary-button" onClick={exportListPdf}><FileDown size={17}/> Gerar PDF</button></div></section></div>}
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Fechar aviso"><X size={16}/></button></div>}
-      {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">{scannerStep === "barcode" ? "Escanear produto" : "Ler etiqueta do produto"}</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">{cameraReady ? (scannerStep === "barcode" ? "Aponte para o código de barras da embalagem ou escolha ler somente a etiqueta." : (scannedProductName ? "Produto: " + scannedProductName + ". Aponte para a etiqueta com o preço." : "Enquadre a etiqueta inteira. O aplicativo tentará reconhecer o nome e o preço.")) : "Iniciando câmera traseira..."}</p><div className="scanner-status">{scanResult?.price ? "Preço detectado" : aiBusy ? "Analisando a imagem com IA (limite de 45 segundos)..." : scanning ? (scannerStep === "barcode" ? "Procurando código de barras..." : "Etiqueta pronta para análise.") : "Preparando leitura automática..."}</div><p className="form-hint">{scannerStep === "barcode" ? "Aponte para o código de barras da embalagem." : "Aponte para a etiqueta inteira, com nome e preço nítidos. A leitura é automática."}</p>{scannerStep === "price" && <div className="ocr-debug"><strong>{ocrPreview ? "Resultado da análise:" : "Leitura inteligente:"}</strong><span>{ocrPreview || "Enquadre a etiqueta e toque em analisar. O Gemini tentará identificar o produto e o preço."}</span></div>}{scannerStep === "barcode" && <button type="button" className="text-button" onClick={() => { setScannedProductName(""); setScanResult(null); setScannerStep("price"); }}>Ler somente a etiqueta de preço</button>}{scannerStep === "price" && !scanResult?.price && <button type="button" className="primary-button" disabled={!cameraReady || aiBusy} onClick={analyzeLabel}><Camera size={17}/>{aiBusy ? "Analisando com Gemini..." : "Analisar etiqueta com IA"}</button>}{scanResult && scanResult.price > 0 && <div className="scan-result"><strong>Produto e preço identificados</strong><label className="scan-name-label">Produto identificado<input aria-label="Nome do produto identificado" value={scannedProductName} onChange={(event) => setScannedProductName(event.target.value)} placeholder="Digite o nome se a etiqueta não identificar"/></label><label className="scan-name-label">Preço por unidade (R$)<input aria-label="Preço unitário" inputMode="decimal" value={String(scanResult.price).replace(".", ",")} onChange={(event) => { const value = parseBRLAmount(event.target.value); if (value !== null) setScanResult((current) => current ? { ...current, price: value } : current); }}/></label><label className="scan-name-label">Quantidade desejada<input aria-label="Quantidade desejada" type="number" min="0.001" step="any" inputMode="decimal" value={scanQuantity} onChange={(event) => setScanQuantity(event.target.value)}/></label><div className="scan-subtotal"><span>Subtotal da compra</span><b>{formatBRL(Math.round(scanResult.price * Math.max(Number(scanQuantity.replace(",", ".")) || 0, 0) * 100))}</b></div><small>Confira o produto, o preço unitário e a quantidade. A soma será lançada no orçamento ao confirmar.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult && scanResult.price > 0 ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Adicionar à compra</button> : <button type="button" className="primary-button" disabled><Camera size={17}/>{scanning ? "Leitura automática ativa" : "Aguardando câmera"}</button>}</div></section></div>}
+      {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">{scannerStep === "barcode" ? "Escanear produto" : "Ler etiqueta do produto"}</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">{cameraReady ? (scannerStep === "barcode" ? "Aponte para o código de barras da embalagem ou escolha ler somente a etiqueta." : (scannedProductName ? "Produto: " + scannedProductName + ". Aponte para a etiqueta com o preço." : "Enquadre a etiqueta inteira. O aplicativo tentará reconhecer o nome e o preço.")) : "Iniciando câmera traseira..."}</p><div className="scanner-status">{scanResult?.price ? "Preço detectado" : aiBusy ? "Lendo a etiqueta no próprio celular..." : scanning ? (scannerStep === "barcode" ? "Procurando código de barras..." : "Etiqueta pronta para análise.") : "Preparando leitura automática..."}</div><p className="form-hint">{scannerStep === "barcode" ? "Aponte para o código de barras da embalagem." : "Aponte para a etiqueta inteira, com nome e preço nítidos. A leitura é automática."}</p>{scannerStep === "price" && <div className="ocr-debug"><strong>{ocrPreview ? "Resultado da análise:" : "Leitura gratuita no celular:"}</strong><span>{ocrPreview || "Enquadre a etiqueta e toque em analisar. O leitor OCR reconhece textos e números sem API paga."}</span></div>}{scannerStep === "barcode" && <button type="button" className="text-button" onClick={() => { setScannedProductName(""); setScanResult(null); setScannerStep("price"); }}>Ler somente a etiqueta de preço</button>}{scannerStep === "price" && !scanResult?.price && <button type="button" className="primary-button" disabled={!cameraReady || aiBusy} onClick={analyzeLabel}><Camera size={17}/>{aiBusy ? "Lendo etiqueta..." : "Ler etiqueta gratuitamente"}</button>}{scanResult && scanResult.price > 0 && <div className="scan-result"><strong>Produto e preço reconhecidos</strong><label className="scan-name-label">Produto identificado<input aria-label="Nome do produto identificado" value={scannedProductName} onChange={(event) => setScannedProductName(event.target.value)} placeholder="Digite o nome se a etiqueta não identificar"/></label><label className="scan-name-label">Preço por unidade (R$)<input aria-label="Preço unitário" inputMode="decimal" value={String(scanResult.price).replace(".", ",")} onChange={(event) => { const value = parseBRLAmount(event.target.value); if (value !== null) setScanResult((current) => current ? { ...current, price: value } : current); }}/></label><label className="scan-name-label">Quantidade desejada<input aria-label="Quantidade desejada" type="number" min="0.001" step="any" inputMode="decimal" value={scanQuantity} onChange={(event) => setScanQuantity(event.target.value)}/></label><div className="scan-subtotal"><span>Subtotal da compra</span><b>{formatBRL(Math.round(scanResult.price * Math.max(Number(scanQuantity.replace(",", ".")) || 0, 0) * 100))}</b></div><small>Confira o produto, o preço unitário e a quantidade. A soma será lançada no orçamento ao confirmar.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult && scanResult.price > 0 ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Adicionar à compra</button> : <button type="button" className="primary-button" disabled><Camera size={17}/>{scanning ? "Leitura automática ativa" : "Aguardando câmera"}</button>}</div></section></div>}
 
     </div>
   );
