@@ -111,7 +111,6 @@ function App() {
     const unit = item.measure === "un" ? "un." : item.measure;
     return `${item.quantity.toLocaleString("pt-BR")} ${unit} × ${formatBRL(Math.round(item.unitPrice * 100))}`;
   };
-  const notifyScanner = () => setNotice("O leitor OCR de etiquetas será implementado na próxima etapa. Por enquanto, registre o preço manualmente.");
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -159,11 +158,11 @@ function App() {
       const result = await worker.recognize(canvas);
       await worker.terminate();
       const text = result.data.text;
-      const matches = [...text.matchAll(/(?:R\\s*\\$\\s*)?(\\d{1,4}(?:\\.\\d{3})*,\\d{2})/gi)];
+      const matches = [...text.matchAll(/(?:R\s*\$\s*)?(\d{1,4}(?:\.\d{3})*,\d{2})/gi)];
       const priceText = matches.at(-1)?.[1];
       const detectedPrice = priceText ? parseBRLAmount(priceText) : null;
-      const nameLines = text.split(/\\r?\\n/).map((line) => line.replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
-        .filter((line) => line.length >= 3 && !/^(R\\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\\d+[,.]\\d{2}/.test(line));
+      const nameLines = text.split(/\r?\n/).map((line) => line.replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim())
+        .filter((line) => line.length >= 3 && !/^(R\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\d+[,.]\d{2}/.test(line));
       const detectedName = nameLines.sort((left, right) => right.length - left.length)[0] ?? "";
       if (detectedPrice === null) throw new Error("Não consegui identificar o preço. Aproxime a câmera da etiqueta e tente novamente.");
       setScanResult({ name: detectedName, price: detectedPrice });
@@ -180,7 +179,7 @@ function App() {
       setNotice("O preço foi identificado, mas o nome não. Tente novamente enquadrando toda a etiqueta.");
       return;
     }
-    const normalize = (value: string) => value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const match = state.items.find((item) => normalize(item.name).includes(normalize(cleanName)) || normalize(cleanName).includes(normalize(item.name)));
     const now = new Date().toISOString();
     if (match) {
