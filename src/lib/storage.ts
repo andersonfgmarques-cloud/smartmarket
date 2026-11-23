@@ -26,7 +26,7 @@ function isShoppingItem(value: unknown): value is ShoppingItem {
     typeof value.unitPrice === "number" &&
     Number.isFinite(value.unitPrice) &&
     value.unitPrice >= 0 &&
-    typeof value.checked === "boolean" &&
+    typeof value.checked === "boolean" &&\n    (value.favorite === undefined || typeof value.favorite === "boolean") &&
     typeof value.updatedAt === "string"
   );
 }
