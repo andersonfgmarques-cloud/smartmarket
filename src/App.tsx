@@ -24,7 +24,6 @@ function App() {
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
   const [scanResult, setScanResult] = useState<{ name: string; price: number } | null>(null);
   const [scanQuantity, setScanQuantity] = useState("1");
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -124,7 +123,6 @@ function App() {
   const openScanner = () => {
     setScanResult(null);
     setScanQuantity("1");
-    setOcrProgress(0);
     setShowScanner(true);
   };
   useEffect(() => {
@@ -199,10 +197,8 @@ function App() {
                   .filter((line) => line.length >= 3 && !/^(R\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\d+[,.]\d{2}/.test(line));
                 const productName = lines.sort((a, b) => b.length - a.length)[0] ?? "";
                 setScanResult({ name: productName, price: candidates[0] });
-                setOcrProgress(100);
                 break;
               }
-              setOcrProgress((current) => current >= 90 ? 10 : current + 10);
             }
           }
           await wait(1100);
