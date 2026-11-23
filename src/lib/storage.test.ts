@@ -3,7 +3,7 @@ import { normalizeState } from "./storage";
 
 describe("normalização do armazenamento", () => {
   it("retorna estado vazio para dados ausentes ou inválidos", () => {
-    expect(normalizeState(null)).toEqual({ items: [], budget: 0 });
+    expect(normalizeState(null)).toEqual({ items: [], budget: 0, purchases: [] });
     expect(normalizeState("inválido")).toEqual({ items: [], budget: 0 });
   });
 
