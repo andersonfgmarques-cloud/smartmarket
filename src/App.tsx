@@ -10,7 +10,8 @@ const categories = ["Mercearia", "Hortifruti", "Carnes", "Laticínios", "Bebidas
 function App() {
   const [state, setState] = useState<ShoppingState>(initialState);
   const [ready, setReady] = useState(false);
-  const [showForm, setShowForm] = useState(false);\n  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Mercearia");
   const [measure, setMeasure] = useState<Measure>("un");
@@ -35,15 +36,43 @@ function App() {
   }, [state]);
 
   const visibleItems = state.items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()));
-  const openAddForm = () => {\n    setEditingId(null);\n    setName("");\n    setCategory("Mercearia");\n    setMeasure("un");\n    setQuantity("1");\n    setPrice("");\n    setShowForm(true);\n  };\n  const openEditForm = (item: ShoppingItem) => {\n    setEditingId(item.id);\n    setName(item.name);\n    setCategory(item.category);\n    setMeasure(item.measure);\n    setQuantity(String(item.quantity));\n    setPrice(String(item.unitPrice).replace(".", ","));\n    setShowForm(true);\n  };\n  const closeForm = () => { setShowForm(false); setEditingId(null); };\n  const addItem = (event: React.FormEvent<HTMLFormElement>) => {
+  const openAddForm = () => {
+    setEditingId(null);
+    setName("");
+    setCategory("Mercearia");
+    setMeasure("un");
+    setQuantity("1");
+    setPrice("");
+    setShowForm(true);
+  };
+  const openEditForm = (item: ShoppingItem) => {
+    setEditingId(item.id);
+    setName(item.name);
+    setCategory(item.category);
+    setMeasure(item.measure);
+    setQuantity(String(item.quantity));
+    setPrice(String(item.unitPrice).replace(".", ","));
+    setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditingId(null); };
+  const addItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const parsedPrice = Number(price.replace(",", "."));
     const parsedQuantity = Number(quantity.replace(",", "."));
     if (!name.trim() || !Number.isFinite(parsedPrice) || parsedPrice < 0 || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return;
     const kind = measure === "un" ? "unit" : measure === "l" || measure === "ml" ? "volume" : "weight";
-    const item = createItem({ name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: parsedPrice, });
-    setState((current) => ({ ...current, items: [item, ...current.items] }));
-    setName(""); setPrice(""); setQuantity("1"); setShowForm(false);
+    if (editingId) {
+      setState((current) => ({
+        ...current,
+        items: current.items.map((item) => item.id === editingId
+          ? { ...item, name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: parsedPrice, updatedAt: new Date().toISOString() }
+          : item),
+      }));
+    } else {
+      const item = createItem({ name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: parsedPrice });
+      setState((current) => ({ ...current, items: [item, ...current.items] }));
+    }
+    closeForm();
   };
   const updateBudget = () => {
     const value = Number(budgetInput.replace(",", "."));
@@ -78,7 +107,7 @@ function App() {
         <section className="welcome-row"><div><p className="eyebrow">ORGANIZAÇÃO QUE ECONOMIZA</p><h1>Olá, boas compras <span>✳</span></h1><p className="muted">Sua lista organizada. Seus gastos sob controle.</p></div><button className="primary-button" onClick={openAddForm}><Plus size={18}/> Adicionar produto</button></section>
 
         <section className="hero-card">
-          <div className="hero-copy"><span className="hero-kicker"><ShoppingBasket size={14}/> SEU DINHEIRO, BEM CUIDADO</span><h2>Compras inteligentes.<br/>Sem surpresas no caixa.</h2><p>Registre os preços, acompanhe o total<br className="desktop-break"/> e mantenha seu orçamento sob controle.</p><button className="hero-button" onClick={() => setShowForm(true)}><Plus size={17}/> Começar minha lista <ChevronRight size={17}/></button></div>
+          <div className="hero-copy"><span className="hero-kicker"><ShoppingBasket size={14}/> SEU DINHEIRO, BEM CUIDADO</span><h2>Compras inteligentes.<br/>Sem surpresas no caixa.</h2><p>Registre os preços, acompanhe o total<br className="desktop-break"/> e mantenha seu orçamento sob controle.</p><button className="hero-button" onClick={openAddForm}><Plus size={17}/> Começar minha lista <ChevronRight size={17}/></button></div>
           <div className="hero-art" aria-hidden="true"><ShoppingBasket size={118} strokeWidth={1.1}/><span className="art-leaf">✳</span></div>
         </section>
 
@@ -90,10 +119,10 @@ function App() {
 
         <section className="content-grid">
           <article className="list-panel" id="shopping-list">
-            <div className="section-heading"><div><h3>Minha lista de compras</h3><p className="muted">Adicione os produtos e acompanhe os preços.</p></div><button className="text-button" onClick={() => setShowForm(true)}><Plus size={16}/> Novo item</button></div>
+            <div className="section-heading"><div><h3>Minha lista de compras</h3><p className="muted">Adicione os produtos e acompanhe os preços.</p></div><button className="text-button" onClick={openAddForm}><Plus size={16}/> Novo item</button></div>
             <div className="list-toolbar"><div className="search-box"><Search size={16}/><input aria-label="Pesquisar produtos" placeholder="Buscar produto..." value={search} onChange={(e) => setSearch(e.target.value)}/></div><span className="item-count">{state.items.length} produtos</span></div>
-            {visibleItems.length === 0 ? <div className="empty-state"><span className="empty-icon"><ShoppingBasket size={27}/></span><h4>{search ? "Nenhum produto encontrado" : "Sua lista começa aqui"}</h4><p>{search ? "Experimente outro termo." : "Adicione os produtos que você precisa comprar."}</p><button className="outline-button" onClick={() => setShowForm(true)}><Plus size={16}/> Adicionar primeiro produto</button></div> :
-              <div className="item-list">{visibleItems.map((item) => <div className={`product-row ${item.checked ? "is-checked" : ""}`} key={item.id}><button className="check-button" aria-label={item.checked ? "Desmarcar comprado" : "Marcar como comprado"} onClick={() => toggleItem(item.id)}>{item.checked && <Check size={15}/>}</button><div className="product-info"><strong>{item.name}</strong><span>{item.category} · {formatItem(item)}</span></div><div className="product-price"><strong>{formatBRL(calculateSubtotal(item.unitPrice, item.quantity, item.measure))}</strong><small>subtotal</small></div><button className="icon-button" aria-label={`Editar ${item.name}`} onClick={() => openEditForm(item)}><Pencil size={15}/></button><button className="icon-button danger" aria-label={`Excluir ${item.name}`} onClick={() => removeItem(item.id)}><Trash2 size={16}/></button></div>)}</div>}
+            {visibleItems.length === 0 ? <div className="empty-state"><span className="empty-icon"><ShoppingBasket size={27}/></span><h4>{search ? "Nenhum produto encontrado" : "Sua lista começa aqui"}</h4><p>{search ? "Experimente outro termo." : "Adicione os produtos que você precisa comprar."}</p><button className="outline-button" onClick={openAddForm}><Plus size={16}/> Adicionar primeiro produto</button></div> :
+              <div className="item-list">{visibleItems.map((item) => <div className={`product-row ${item.checked ? "is-checked" : ""}`} key={item.id}><button className="check-button" aria-label={item.checked ? "Desmarcar comprado" : "Marcar como comprado"} onClick={() => toggleItem(item.id)}>{item.checked && <Check size={15}/>}</button><div className="product-info"><strong>{item.name}</strong><span>{item.category} · {formatItem(item)}</span></div><div className="product-price"><strong>{formatBRL(calculateSubtotal(item.unitPrice, item.quantity, item.measure))}</strong><small>subtotal</small></div><button className="icon-button" aria-label={`Editar ${item.name}`} onClick={() => openEditForm(item)}><Pencil size={15}/></button><button className="icon-button" aria-label={`Editar ${item.name}`} onClick={() => openEditForm(item)}><Pencil size={15}/></button><button className="icon-button danger" aria-label={`Excluir ${item.name}`} onClick={() => removeItem(item.id)}><Trash2 size={16}/></button></div>)}</div>}
             <div className="list-footer"><span>{boughtCount} de {state.items.length} produtos comprados</span><strong>{formatBRL(totals.cents)}</strong></div>
           </article>
 
