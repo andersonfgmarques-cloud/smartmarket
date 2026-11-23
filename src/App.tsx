@@ -184,11 +184,11 @@ function App() {
       await worker.terminate();
       const text = result.data.text;
       const normalizedText = text.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1");
-      const matches = [...normalizedText.matchAll(/(?:R\\s*\\$\\s*)?(\\d{1,4}(?:[. ]\\d{3})*[,.]\\d{2})/gi)];
-      const priceText = matches.at(-1)?.[1]?.replace(/ /g, "").replace(/\\.(?=\\d{3}(?:[,.]|$))/g, "").replace(",", ".");
+      const matches = [...normalizedText.matchAll(/(?:R\s*\$\s*)?(\d{1,4}(?:[. ]\d{3})*[,.]\d{2})/gi)];
+      const priceText = matches.at(-1)?.[1]?.replace(/ /g, "").replace(/\.(?=\d{3}(?:[,.]|$))/g, "").replace(",", ".");
       const detectedPrice = priceText ? parseBRLAmount(priceText) : null;
-      const nameLines = text.split(/\\r?\\n/).map((line) => line.replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
-        .filter((line) => line.length >= 3 && !/^(R\\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\\d+[,.]\\d{2}/.test(line));
+      const nameLines = text.split(/\r?\n/).map((line) => line.replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim())
+        .filter((line) => line.length >= 3 && !/^(R\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\d+[,.]\d{2}/.test(line));
       const detectedName = nameLines.sort((left, right) => right.length - left.length)[0] ?? "";
       if (detectedPrice === null) throw new Error("Não consegui identificar o preço. Aproxime a câmera da etiqueta e tente novamente.");
       setScanResult({ name: detectedName, price: detectedPrice });
