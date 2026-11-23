@@ -1,25 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, Pencil, Plus, Search, ShoppingBasket, ShoppingCart, SlidersHorizontal, Star, Trash2, Wallet, X, ScanLine } from "lucide-react";
+import { ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, ShoppingBasket, ShoppingCart, SlidersHorizontal, Wallet, X, ScanLine } from "lucide-react";
 import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
-import type { Measure, PurchaseRecord, ShoppingItem, ShoppingState } from "./types";
+import type { PurchaseRecord, ShoppingItem, ShoppingState } from "./types";
 
 const initialState: ShoppingState = { items: [], budget: 0, purchases: [] };
-const categories = ["Mercearia", "Hortifruti", "Carnes", "Laticínios", "Bebidas", "Limpeza", "Higiene", "Outros"];
 
 function App() {
   const [state, setState] = useState<ShoppingState>(initialState);
   const [ready, setReady] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("Mercearia");
-  const [measure, setMeasure] = useState<Measure>("un");
-  const [quantity, setQuantity] = useState("1");
-  const [price, setPrice] = useState("");
   const [budgetInput, setBudgetInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [showFavorites, setShowFavorites] = useState(false);
   const [notice, setNotice] = useState("");
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -43,51 +33,10 @@ function App() {
     return { cents, purchased, remaining: Math.max(state.budget * 100 - purchased, 0) };
   }, [state]);
 
-  const visibleItems = state.items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) && (!showFavorites || item.favorite));
-  const openAddForm = () => {
-    setEditingId(null);
-    setName("");
-    setCategory("Mercearia");
-    setMeasure("un");
-    setQuantity("1");
-    setPrice("");
-    setShowForm(true);
-  };
-  const openEditForm = (item: ShoppingItem) => {
-    setEditingId(item.id);
-    setName(item.name);
-    setCategory(item.category);
-    setMeasure(item.measure);
-    setQuantity(String(item.quantity));
-    setPrice(String(item.unitPrice).replace(".", ","));
-    setShowForm(true);
-  };
-  const closeForm = () => { setShowForm(false); setEditingId(null); };
-  const addItem = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const parsedPrice = parseBRLAmount(price);
-    const parsedQuantity = Number(quantity.replace(",", "."));
-    if (!name.trim() || (price.trim() !== "" && parsedPrice === null) || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return;
-    const savedPrice = parsedPrice ?? 0;
-    const kind = measure === "un" ? "unit" : measure === "l" || measure === "ml" ? "volume" : "weight";
-    if (editingId) {
-      setState((current) => ({
-        ...current,
-        items: current.items.map((item) => item.id === editingId
-          ? { ...item, name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: savedPrice, updatedAt: new Date().toISOString() }
-          : item),
-      }));
-    } else {
-      const item = createItem({ name: name.trim(), category, kind, measure, quantity: parsedQuantity, unitPrice: savedPrice });
-      setState((current) => ({ ...current, items: [item, ...current.items] }));
-    }
-    closeForm();
-  };
   const updateBudget = () => {
     const value = parseBRLAmount(budgetInput);
     if (value !== null) setState((current) => ({ ...current, budget: value }));
   };
-  const toggleItem = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, checked: !item.checked } : item) }));
   const removeItem = (id: string) => setState((current) => ({ ...current, items: current.items.filter((item) => item.id !== id) }));
   const finalizePurchase = () => {
     const purchasedItems = state.items.filter((item) => item.checked);
@@ -109,10 +58,6 @@ function App() {
     setNotice("Compra registrada no histórico.");
   };
   const toggleFavorite = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item) }));
-  const formatItem = (item: ShoppingItem) => {
-    const unit = item.measure === "un" ? "un." : item.measure;
-    return `${item.quantity.toLocaleString("pt-BR")} ${unit} × ${formatBRL(Math.round(item.unitPrice * 100))}`;
-  };
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
