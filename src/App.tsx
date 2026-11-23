@@ -25,7 +25,12 @@ function App() {
   const [listModal, setListModal] = useState<"purchased" | "scanned" | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const ocrWorkerRef = useRef<Awaited<ReturnType<typeof createWorker>> | null>(null);\n\n  useEffect(() => () => {\n    void ocrWorkerRef.current?.terminate();\n    ocrWorkerRef.current = null;\n  }, []);
+  const ocrWorkerRef = useRef<Awaited<ReturnType<typeof createWorker>> | null>(null);
+
+  useEffect(() => () => {
+    void ocrWorkerRef.current?.terminate();
+    ocrWorkerRef.current = null;
+  }, []);
 
   useEffect(() => {
     loadState().then((saved) => { setState(saved); setBudgetInput(saved.budget ? String(saved.budget) : ""); }).finally(() => setReady(true));
