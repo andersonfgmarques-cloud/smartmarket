@@ -22,7 +22,9 @@ function App() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [notice, setNotice] = useState("");
   const [showScanner, setShowScanner] = useState(false);
-  const [scanning, setScanning] = useState(false);\n  const [cameraReady, setCameraReady] = useState(false);\n  const [ocrProgress, setOcrProgress] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
   const [scanResult, setScanResult] = useState<{ name: string; price: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
