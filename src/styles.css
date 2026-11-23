@@ -3,3 +3,15 @@
 @media(max-width:1050px){.sidebar{width:205px;padding:25px 16px}.main-content{margin-left:205px;padding:0 25px}.content-grid{grid-template-columns:minmax(0,1.5fr) minmax(235px,.9fr)}.hero-art{right:2%;opacity:.75}}
 @media(max-width:760px){.sidebar{position:static;width:auto;height:auto;padding:12px 17px;border-right:0;border-bottom:1px solid var(--line);display:block}.brand{font-size:19px}.nav-caption,.sidebar nav,.sidebar-bottom{display:none}.main-content{margin:0;padding:0 16px}.topbar{height:48px}.welcome-row{padding:24px 0 17px;align-items:flex-end}.welcome-row h1{font-size:22px}.welcome-row .muted{font-size:10px}.welcome-row>.primary-button{font-size:0;padding:11px}.welcome-row>.primary-button svg{width:20px;height:20px}.hero-card{min-height:200px;padding:23px 20px}.hero-card h2{font-size:21px}.hero-card p{font-size:10px}.hero-art{right:-80px;opacity:.25}.stats-grid{grid-template-columns:1fr 1fr;gap:9px;margin:13px 0 18px}.stat-card{padding:13px;min-height:104px}.stat-card:last-child{grid-column:span 2}.stat-card>strong{font-size:19px}.content-grid{grid-template-columns:1fr;gap:12px}.list-panel{padding:17px 14px 0}.right-column{grid-template-columns:1fr}.footer{font-size:8px}.date-label{display:none}.form-two{grid-template-columns:1fr 1fr}}
 @media(max-width:390px){.welcome-row h1{font-size:19px}.hero-card h2{font-size:19px}.hero-card{padding:19px 15px}.form-two{grid-template-columns:1fr}}
+
+.scanner-video{display:block;width:100%;max-height:52vh;min-height:220px;object-fit:cover;background:#17231c;border-radius:9px}
+.scanner-modal{max-width:520px}
+.scan-result{display:grid;gap:6px;padding:13px;border:1px solid #cfe6d6;background:#f1faf3;border-radius:8px}
+.scan-result strong{font-size:12px;color:#087443}
+.scan-result span{font-size:13px;color:#26372c}
+.scan-result b{font:800 22px Manrope,sans-serif;color:#087443}
+.scan-result small{font-size:10px;color:#77867b}
+.scanner-modal .form-hint{margin:10px 0}
+.scanner-modal .modal-actions{margin-top:14px}
+button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:520px){.scanner-modal{padding:17px}.scanner-video{min-height:200px}}
