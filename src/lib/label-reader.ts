@@ -4,7 +4,7 @@ export type LabelReading =
   | { ok: true; price: number; productName: string | null; confidence: number }
   | { ok: false; reason: "low-confidence" | "no-price" | "ambiguous-price" };
 
-const PRICE_PATTERN = /(?:R\\s*\\$\\s*)?([0-9OoQIl|Ss]{1,3}(?:\\.[0-9OoQIl|Ss]{3})*[,.][0-9OoQIl|Ss]{2}|[0-9OoQIl|Ss]+[,.][0-9OoQIl|Ss]{2})/gi;
+const PRICE_PATTERN = /(?:R\s*\$\s*)?([0-9OoQIl|Ss]{1,3}(?:\.[0-9OoQIl|Ss]{3})*[,.][0-9OoQIl|Ss]{2}|[0-9OoQIl|Ss]+[,.][0-9OoQIl|Ss]{2})/gi;
 
 function normalizeDigits(value: string): string {
   return value
@@ -22,7 +22,7 @@ export function extractLabelReading(text: string, confidence: number): LabelRead
     const amountText = normalizeDigits(match[1]);
     return {
       amount: parseBRLAmount(amountText),
-      hasCurrency: /^R\\s*\\$\\s*/i.test(match[0]),
+      hasCurrency: /^R\s*\$\s*/i.test(match[0]),
     };
   }).filter((item): item is { amount: number; hasCurrency: boolean } =>
     item.amount !== null && item.amount > 0 && item.amount < 100000
@@ -36,8 +36,8 @@ export function extractLabelReading(text: string, confidence: number): LabelRead
   if (prices.length !== 1) return { ok: false, reason: "ambiguous-price" };
 
   const withoutPrices = text.replace(PRICE_PATTERN, " ");
-  const productName = withoutPrices.split(/\\r?\\n/)
-    .map((line) => line.replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
+  const productName = withoutPrices.split(/\r?\n/)
+    .map((line) => line.replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim())
     .filter((line) => line.length >= 4 && (line.match(/[A-Za-zÀ-ÿ]/g)?.length ?? 0) >= 3)
     .sort((a, b) => b.length - a.length)[0] ?? null;
 
