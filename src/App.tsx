@@ -22,7 +22,7 @@ function App() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [notice, setNotice] = useState("");
   const [showScanner, setShowScanner] = useState(false);
-  const [scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(false);\n  const [cameraReady, setCameraReady] = useState(false);\n  const [ocrProgress, setOcrProgress] = useState(0);
   const [scanResult, setScanResult] = useState<{ name: string; price: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -116,23 +116,48 @@ function App() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraReady(false);
   };
-  const openScanner = async () => {
+  const openScanner = () => {
     setScanResult(null);
+    setOcrProgress(0);
     setShowScanner(true);
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Este navegador não oferece acesso à câmera.");
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-    } catch (error) {
-      setShowScanner(false);
-      setNotice(error instanceof Error ? error.message : "Não foi possível acessar a câmera. Verifique a permissão do navegador.");
-    }
   };
+  useEffect(() => {
+    if (!showScanner) return;
+    let cancelled = false;
+    let activeStream: MediaStream | null = null;
+    const startCamera = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("A câmera exige HTTPS e um navegador compatível. Abra o SmartMarket pelo Chrome ou Safari.");
+        activeStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        });
+        if (cancelled) {
+          activeStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = activeStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = activeStream;
+          await videoRef.current.play();
+          if (!cancelled) setCameraReady(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setNotice(error instanceof Error ? error.message : "Não foi possível abrir a câmera. Autorize o acesso nas configurações do navegador.");
+          setShowScanner(false);
+        }
+      }
+    };
+    void startCamera();
+    return () => {
+      cancelled = true;
+      activeStream?.getTracks().forEach((track) => track.stop());
+      if (streamRef.current === activeStream) streamRef.current = null;
+    };
+  }, [showScanner]);
   const closeScanner = () => {
     stopCamera();
     setShowScanner(false);
@@ -165,7 +190,7 @@ function App() {
         .filter((line) => line.length >= 3 && !/^(R\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\d+[,.]\d{2}/.test(line));
       const detectedName = nameLines.sort((left, right) => right.length - left.length)[0] ?? "";
       if (detectedPrice === null) throw new Error("Não consegui identificar o preço. Aproxime a câmera da etiqueta e tente novamente.");
-      setScanResult({ name: detectedName, price: detectedPrice });
+      setScanResult({ name: detectedName, price: detectedPrice });\n      setOcrProgress(100);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Falha ao ler a etiqueta.");
     } finally {
@@ -258,7 +283,7 @@ function App() {
       </main>
 
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Fechar aviso"><X size={16}/></button></div>}
-      {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">Ler etiqueta de preço</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">Enquadre o nome do produto e o preço na etiqueta. Mantenha a câmera firme e com boa iluminação.</p>{scanResult && <div className="scan-result"><strong>Leitura identificada</strong><span>{scanResult.name || "Nome não identificado"}</span><b>{formatBRL(Math.round(scanResult.price * 100))}</b><small>Confira o resultado antes de registrar.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Confirmar compra</button> : <button type="button" className="primary-button" disabled={scanning} onClick={captureLabel}><Camera size={17}/>{scanning ? "Lendo etiqueta..." : "Capturar e identificar"}</button>}</div></section></div>}
+      {showScanner && <div className="modal-backdrop scanner-backdrop"><section className="modal scanner-modal" role="dialog" aria-modal="true" aria-labelledby="scanner-title"><div className="modal-heading"><div><p className="eyebrow">COMPRA EM TEMPO REAL</p><h2 id="scanner-title">Ler etiqueta de preço</h2></div><button className="icon-button" onClick={closeScanner} aria-label="Fechar leitor"><X/></button></div><video ref={videoRef} className="scanner-video" playsInline muted/><p className="form-hint">{cameraReady ? "Câmera pronta. Enquadre a etiqueta inteira, principalmente o preço em números grandes." : "Iniciando câmera traseira..."}</p><p className="form-hint">Enquadre o nome do produto e o preço na etiqueta. Mantenha a câmera firme e com boa iluminação.</p>{scanResult && <div className="scan-result"><strong>Leitura identificada</strong><span>{scanResult.name || "Nome não identificado"}</span><b>{formatBRL(Math.round(scanResult.price * 100))}</b><small>Confira o resultado antes de registrar.</small></div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={closeScanner}>Cancelar</button>{scanResult ? <button type="button" className="primary-button" onClick={confirmScan}><Check size={17}/> Confirmar compra</button> : <button type="button" className="primary-button" disabled={scanning} onClick={captureLabel}><Camera size={17}/>{scanning ? `Lendo etiqueta... ${ocrProgress}%` : "Capturar e identificar"}</button>}</div></section></div>}
       {showForm && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closeForm(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><p className="eyebrow">SUA LISTA</p><h2 id="modal-title">{editingId ? "Editar produto" : "Adicionar produto"}</h2></div><button className="icon-button" onClick={closeForm} aria-label="Fechar"><X/></button></div><form onSubmit={addItem}><label>Nome do produto<input autoFocus required placeholder="Ex.: Arroz tipo 1" value={name} onChange={(e) => setName(e.target.value)}/></label><label>Categoria<select value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((entry) => <option key={entry}>{entry}</option>)}</select></label><div className="form-two"><label>Unidade de venda<select value={measure} onChange={(e) => setMeasure(e.target.value as Measure)}><option value="un">Unidade</option><option value="kg">Quilograma (kg)</option><option value="g">Grama (g)</option><option value="l">Litro (L)</option><option value="ml">Mililitro (ml)</option></select></label><label>{measure === "un" ? "Quantidade" : "Quantidade (" + measure + ")"}<input required type="number" min="0.001" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)}/></label></div><p className="form-hint">O preço será identificado pela câmera durante a compra. Você pode deixar o preço em branco.</p><div className="modal-actions"><button type="button" className="outline-button" onClick={closeForm}>Cancelar</button><button type="submit" className="primary-button">{editingId ? <Check size={17}/> : <Plus size={17}/>} {editingId ? "Salvar alterações" : "Adicionar à lista"}</button></div></form></section></div>}
     </div>
   );
