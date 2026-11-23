@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, Pencil, Plus, Search, ShoppingBasket, ShoppingCart, SlidersHorizontal, Star, Trash2, Wallet, X } from "lucide-react";
 import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
-import type { Measure, ShoppingItem, ShoppingState } from "./types";
+import type { Measure, PurchaseRecord, ShoppingItem, ShoppingState } from "./types";
 
-const initialState: ShoppingState = { items: [], budget: 0 };
+const initialState: ShoppingState = { items: [], budget: 0, purchases: [] };
 const categories = ["Mercearia", "Hortifruti", "Carnes", "Laticínios", "Bebidas", "Limpeza", "Higiene", "Outros"];
 
 function App() {
@@ -81,6 +81,25 @@ function App() {
   };
   const toggleItem = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, checked: !item.checked } : item) }));
   const removeItem = (id: string) => setState((current) => ({ ...current, items: current.items.filter((item) => item.id !== id) }));
+  const finalizePurchase = () => {
+    const purchasedItems = state.items.filter((item) => item.checked);
+    if (purchasedItems.length === 0) {
+      setNotice("Marque os produtos comprados antes de finalizar a compra.");
+      return;
+    }
+    const record: PurchaseRecord = {
+      id: crypto.randomUUID(),
+      purchasedAt: new Date().toISOString(),
+      items: purchasedItems.map((item) => ({ ...item })),
+      totalCents: purchasedItems.reduce((sum, item) => sum + calculateSubtotal(item.unitPrice, item.quantity, item.measure), 0),
+    };
+    setState((current) => ({
+      ...current,
+      items: current.items.filter((item) => !item.checked),
+      purchases: [record, ...(current.purchases ?? [])],
+    }));
+    setNotice("Compra registrada no histórico.");
+  };
   const toggleFavorite = (id: string) => setState((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item) }));
   const formatItem = (item: ShoppingItem) => {
     const unit = item.measure === "un" ? "un." : item.measure;
@@ -125,7 +144,7 @@ function App() {
             <div className="list-toolbar"><div className="search-box"><Search size={16}/><input aria-label="Pesquisar produtos" placeholder="Buscar produto..." value={search} onChange={(e) => setSearch(e.target.value)}/></div><div className="list-tools"><button className={`text-button ${showFavorites ? "selected" : ""}`} onClick={() => setShowFavorites((value) => !value)}><Star size={14}/> Favoritos</button><span className="item-count">{visibleItems.length} produtos</span></div></div>
             {visibleItems.length === 0 ? <div className="empty-state"><span className="empty-icon"><ShoppingBasket size={27}/></span><h4>{search ? "Nenhum produto encontrado" : "Sua lista começa aqui"}</h4><p>{search ? "Experimente outro termo." : "Adicione os produtos que você precisa comprar."}</p><button className="outline-button" onClick={openAddForm}><Plus size={16}/> Adicionar primeiro produto</button></div> :
               <div className="item-list">{visibleItems.map((item) => <div className={`product-row ${item.checked ? "is-checked" : ""}`} key={item.id}><button className="check-button" aria-label={item.checked ? "Desmarcar comprado" : "Marcar como comprado"} onClick={() => toggleItem(item.id)}>{item.checked && <Check size={15}/>}</button><div className="product-info"><strong>{item.name}</strong><span>{item.category} · {formatItem(item)}</span></div><div className="product-price"><strong>{formatBRL(calculateSubtotal(item.unitPrice, item.quantity, item.measure))}</strong><small>subtotal</small></div><button className={`icon-button favorite-button ${item.favorite ? "is-favorite" : ""}`} aria-label={item.favorite ? `Remover ${item.name} dos favoritos` : `Adicionar ${item.name} aos favoritos`} onClick={() => toggleFavorite(item.id)}><Star size={15} fill={item.favorite ? "currentColor" : "none"}/></button><button className="icon-button" aria-label={`Editar ${item.name}`} onClick={() => openEditForm(item)}><Pencil size={15}/></button><button className="icon-button danger" aria-label={`Excluir ${item.name}`} onClick={() => removeItem(item.id)}><Trash2 size={16}/></button></div>)}</div>}
-            <div className="list-footer"><span>{boughtCount} de {state.items.length} produtos comprados</span><strong>{formatBRL(totals.cents)}</strong></div>
+            <div className="list-footer"><span>{boughtCount} de {state.items.length} produtos comprados</span><strong>{formatBRL(totals.cents)}</strong></div><button className="outline-button" disabled={boughtCount === 0} onClick={finalizePurchase}>Finalizar compra ({boughtCount})</button>
           </article>
 
           <aside className="right-column">
