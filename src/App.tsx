@@ -206,28 +206,28 @@ function App() {
         .replace(/[OoQ]/g, "0")
         .replace(/[Il|]/g, "1")
         .replace(/[Ss]/g, "5");
-      const pricePattern = /(?:R\\$\\s*)?([0-9OoQIl|Ss]{1,3}(?:\\.[0-9OoQIl|Ss]{3})*,[0-9OoQIl|Ss]{2}|[0-9OoQIl|Ss]+,[0-9OoQIl|Ss]{2})/gi;
+      const pricePattern = /(?:R\$\s*)?([0-9OoQIl|Ss]{1,3}(?:\.[0-9OoQIl|Ss]{3})*,[0-9OoQIl|Ss]{2}|[0-9OoQIl|Ss]+,[0-9OoQIl|Ss]{2})/gi;
       const candidates = [...rawText.matchAll(pricePattern)].map((match) => {
         const normalized = normalizeOcrDigits(match[1]);
-        return { value: parseBRLAmount(normalized), hasCurrency: /^R\\$\\s*/i.test(match[0]) };
+        return { value: parseBRLAmount(normalized), hasCurrency: /^R\$\s*/i.test(match[0]) };
       }).filter((candidate): candidate is { value: number; hasCurrency: boolean } =>
         candidate.value !== null && candidate.value > 0 && candidate.value < 100000
       );
       const currencyPrices = [...new Set(candidates.filter((item) => item.hasCurrency).map((item) => item.value))];
       const allPrices = [...new Set(candidates.map((item) => item.value))];
       const prices = currencyPrices.length ? currencyPrices : allPrices;
-      if (prices.length === 0) {
-        setOcrPreview("Não encontrei um valor monetário legível na imagem.");
-        setNotice("Não identifiquei um preço válido. A etiqueta precisa estar inteira, próxima e nítida.");
+      if ((result.data.confidence || 0) < 45 || prices.length === 0) {
+        setOcrPreview("Não consegui confirmar um preço legível. Centralize a etiqueta e aproxime a câmera.");
+        setNotice("Não identifiquei um preço com segurança. Enquadre somente a etiqueta e tente novamente.");
         return;
       }
       if (prices.length > 1) {
-        setOcrPreview("Encontrei mais de um valor possível. Aproxime o preço principal e tente novamente para evitar registrar o valor errado.");
-        setNotice("A etiqueta apresentou mais de um preço possível. Centralize o preço de venda e tente novamente.");
+        setOcrPreview("Mais de um preço foi encontrado. Não registrei nenhum valor para evitar erro.");
+        setNotice("Encontrei vários preços possíveis. Aproxime o preço principal e tente novamente.");
         return;
       }
-      const lines = rawText.split(/\\r?\\n/)
-        .map((line) => line.replace(pricePattern, "").replace(/[^\\p{L}\\p{N} ]/gu, " ").replace(/\\s+/g, " ").trim())
+      const lines = rawText.split(/\r?\n/)
+        .map((line) => line.replace(pricePattern, "").replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim())
         .filter((line) => line.length >= 4 && /[A-Za-zÀ-ÿ]/.test(line));
       const detectedName = lines.sort((a, b) => b.length - a.length)[0] || scannedProductName;
       setScannedProductName(detectedName);
