@@ -15,6 +15,8 @@ function App() {
   const [scanning, setScanning] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [scanResult, setScanResult] = useState<{ name: string; price: number } | null>(null);
+  const [scannerStep, setScannerStep] = useState<"barcode" | "price">("barcode");
+  const [scannedProductName, setScannedProductName] = useState("");
   const [scanQuantity, setScanQuantity] = useState("1");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -67,6 +69,8 @@ function App() {
   };
   const openScanner = () => {
     setScanResult(null);
+    setScannerStep("barcode");
+    setScannedProductName("");
     setScanQuantity("1");
     setShowScanner(true);
   };
@@ -76,15 +80,9 @@ function App() {
     let activeStream: MediaStream | null = null;
     const startCamera = async () => {
       try {
-        if (!navigator.mediaDevices?.getUserMedia) throw new Error("A câmera exige HTTPS e um navegador compatível. Abra o SmartMarket pelo Chrome ou Safari.");
-        activeStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        });
-        if (cancelled) {
-          activeStream.getTracks().forEach((track) => track.stop());
-          return;
-        }
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("A câmera exige HTTPS e um navegador compatível. Abra pelo Chrome atualizado no Android.");
+        activeStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+        if (cancelled) { activeStream.getTracks().forEach((track) => track.stop()); return; }
         streamRef.current = activeStream;
         if (videoRef.current) {
           videoRef.current.srcObject = activeStream;
@@ -107,17 +105,66 @@ function App() {
   }, [showScanner]);
 
   useEffect(() => {
-    if (!showScanner || !cameraReady || scanResult) return;
+    if (!showScanner || !cameraReady || scannerStep !== "barcode" || scannedProductName) return;
+    let cancelled = false;
+    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    type BarcodeResult = { rawValue: string };
+    type BarcodeDetectorInstance = { detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]> };
+    type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => BarcodeDetectorInstance;
+    const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
+    const runBarcodeScanner = async () => {
+      if (!Detector) {
+        setNotice("Seu navegador não oferece leitura de código de barras. Atualize o Chrome no Android para usar o leitor.");
+        return;
+      }
+      setScanning(true);
+      try {
+        const detector = new Detector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] });
+        while (!cancelled && videoRef.current) {
+          const video = videoRef.current;
+          if (video.readyState >= 2 && video.videoWidth > 0) {
+            const result = await detector.detect(video);
+            const code = result[0]?.rawValue;
+            if (code) {
+              const response = await fetch("https://world.openfoodfacts.org/api/v2/product/" + encodeURIComponent(code) + ".json");
+              if (!response.ok) throw new Error("Falha ao consultar o catálogo de produtos.");
+              const data = await response.json() as { status?: number; product?: { product_name_pt?: string; product_name?: string } };
+              const productName = data.product?.product_name_pt || data.product?.product_name || "";
+              if (data.status === 1 && productName.trim()) {
+                setScannedProductName(productName.trim());
+                setScanResult({ name: productName.trim(), price: 0 });
+                setScannerStep("price");
+              } else {
+                setNotice("Código de barras lido, mas o produto não consta no catálogo. Tente outro produto.");
+              }
+              break;
+            }
+          }
+          await wait(200);
+        }
+      } catch (error) {
+        if (!cancelled) setNotice(error instanceof Error ? error.message : "Não foi possível ler o código de barras.");
+      } finally {
+        if (!cancelled) setScanning(false);
+      }
+    };
+    void runBarcodeScanner();
+    return () => { cancelled = true; };
+  }, [showScanner, cameraReady, scannerStep, scannedProductName]);
+
+  useEffect(() => {
+    if (!showScanner || !cameraReady || scannerStep !== "price" || !scannedProductName || (scanResult?.price ?? 0) > 0) return;
     let cancelled = false;
     let terminateWorker: (() => Promise<unknown>) | undefined;
     const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-    const scanContinuously = async () => {
+    const readPrice = async () => {
       setScanning(true);
       try {
         const { createWorker } = await import("tesseract.js");
         const worker = await createWorker("por+eng", 1);
         terminateWorker = () => worker.terminate();
-        while (!cancelled && videoRef.current && !scanResult) {
+        await worker.setParameters({ tessedit_pageseg_mode: "11", preserve_interword_spaces: "1" });
+        while (!cancelled && videoRef.current) {
           const video = videoRef.current;
           if (video.readyState >= 2 && video.videoWidth > 0) {
             const canvas = document.createElement("canvas");
@@ -126,47 +173,47 @@ function App() {
             canvas.height = Math.round(video.videoHeight * scale);
             const context = canvas.getContext("2d");
             if (context) {
-              context.filter = "contrast(1.35) brightness(1.08)";
+              context.filter = "contrast(1.5) brightness(1.1)";
               context.drawImage(video, 0, 0, canvas.width, canvas.height);
               const result = await worker.recognize(canvas);
               if (cancelled) break;
-              const recognized = result.data.text;
-              const normalized = recognized.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1");
-              const priceMatches = [...normalized.matchAll(/(?:R\s*\$\s*)?(\d{1,4}(?:[. ]\d{3})*[,.]\d{2})/gi)];
-              const candidates = priceMatches.map((match) => {
-                const value = match[1].replace(/ /g, "").replace(/\.(?=\d{3}(?:[,.]|$))/g, "").replace(",", ".");
-                return parseBRLAmount(value);
-              }).filter((value): value is number => value !== null && value > 0 && value < 100000);
-              if (candidates.length > 0) {
-                const lines = recognized.split(/\r?\n/).map((line) => line.replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim())
-                  .filter((line) => line.length >= 3 && !/^(R\$|pre[cç]o|oferta|por|kg|un|cada|unidade)/i.test(line) && !/\d+[,.]\d{2}/.test(line));
-                const productName = lines.sort((a, b) => b.length - a.length)[0] ?? "";
-                setScanResult({ name: productName, price: candidates[0] });
-                break;
+              const lines = result.data.text.split(/\r?\n/);
+              const priceLine = lines.find((line) => /R\s*\$/i.test(line));
+              if (priceLine) {
+                const normalized = priceLine.replace(/[Oo]/g, "0").replace(/[Il|]/g, "1");
+                const match = normalized.match(/R\s*\$\s*(\d{1,4}(?:\.\d{3})*,\d{2})/i);
+                const price = match?.[1] ? parseBRLAmount(match[1]) : null;
+                if (price !== null && price > 0 && price < 100000) {
+                  setScanResult({ name: scannedProductName, price });
+                  break;
+                }
               }
             }
           }
-          await wait(1100);
+          await wait(800);
         }
       } catch (error) {
-        if (!cancelled) setNotice(error instanceof Error ? error.message : "Falha ao iniciar a leitura automática.");
+        if (!cancelled) setNotice(error instanceof Error ? error.message : "Falha ao ler o preço da etiqueta.");
       } finally {
         await terminateWorker?.();
         if (!cancelled) setScanning(false);
       }
     };
-    void scanContinuously();
+    void readPrice();
     return () => { cancelled = true; };
-  }, [showScanner, cameraReady, scanResult]);
+  }, [showScanner, cameraReady, scannerStep, scannedProductName, scanResult?.price]);
+
   const closeScanner = () => {
     stopCamera();
     setShowScanner(false);
     setScanning(false);
     setScanResult(null);
+    setScannerStep("barcode");
+    setScannedProductName("");
   };
   const confirmScan = () => {
     if (!scanResult) return;
-    const cleanName = scanResult.name.trim();
+    const cleanName = scannedProductName.trim() || scanResult.name.trim();
     const parsedQuantity = Number(scanQuantity.replace(",", "."));
     if (!cleanName) { setNotice("Informe o nome do produto antes de adicionar à compra."); return; }
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) { setNotice("Informe uma quantidade válida."); return; }
