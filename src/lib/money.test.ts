@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { calculateSubtotal, formatBRL } from "./money";
+import { calculateSubtotal, formatBRL, parseBRLAmount } from "./money";
+
+describe("interpretação de valores em reais", () => {
+  it("aceita decimal com vírgula", () => expect(parseBRLAmount("1234,56")).toBe(1234.56));
+  it("aceita milhares no padrão brasileiro", () => expect(parseBRLAmount("1.234,56")).toBe(1234.56));
+  it("aceita formato decimal com ponto", () => expect(parseBRLAmount("1234.56")).toBe(1234.56));
+  it("aceita prefixo de moeda e espaços", () => expect(parseBRLAmount(" R$ 1.234,50 ")).toBe(1234.5));
+  it("interpreta ponto de milhar sem casas decimais", () => expect(parseBRLAmount("1.234")).toBe(1234));
+  it("rejeita entradas vazias, negativas e malformadas", () => {
+    expect(parseBRLAmount("")).toBeNull();
+    expect(parseBRLAmount("-10,00")).toBeNull();
+    expect(parseBRLAmount("12,345")).toBeNull();
+    expect(parseBRLAmount("abc")).toBeNull();
+  });
+});
 
 describe("cálculo de subtotais", () => {
   it("calcula unidades", () => expect(calculateSubtotal(5.49, 2, "un")).toBe(1098));
