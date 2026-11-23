@@ -8,7 +8,7 @@ export interface ShoppingItem {
   measure: Measure;
   quantity: number;
   unitPrice: number;
-  checked: boolean;
+  checked: boolean;\n  favorite?: boolean;
   updatedAt: string;
 }
 export interface ShoppingState {
