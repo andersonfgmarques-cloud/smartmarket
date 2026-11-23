@@ -18,3 +18,5 @@ button:disabled{opacity:.55;cursor:not-allowed}
 
 .scanner-status{padding:9px 12px;margin:8px 0;border-radius:8px;background:#eaf6ef;color:#087443;font-size:13px;font-weight:700}
 .scanner-video{object-fit:cover}
+
+.scan-name-label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#315b43}.scan-name-label input{width:100%;min-height:42px;padding:10px 12px;border:1px solid #cbded1;border-radius:8px;background:white;color:#20352a;font:inherit;font-size:15px;box-sizing:border-box}.scan-name-label input:focus{outline:2px solid #0b7547;outline-offset:1px}
