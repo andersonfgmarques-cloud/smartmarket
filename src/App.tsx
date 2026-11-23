@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUpRight, Camera, Check, ChevronRight, CircleHelp, Clock3, Pencil, Plus, Search, ShoppingBasket, ShoppingCart, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
-import { calculateSubtotal, formatBRL } from "./lib/money";
+import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
 import type { Measure, ShoppingItem, ShoppingState } from "./types";
 
@@ -57,9 +57,9 @@ function App() {
   const closeForm = () => { setShowForm(false); setEditingId(null); };
   const addItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const parsedPrice = Number(price.replace(",", "."));
+    const parsedPrice = parseBRLAmount(price);
     const parsedQuantity = Number(quantity.replace(",", "."));
-    if (!name.trim() || !Number.isFinite(parsedPrice) || parsedPrice < 0 || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return;
+    if (!name.trim() || parsedPrice === null || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return;
     const kind = measure === "un" ? "unit" : measure === "l" || measure === "ml" ? "volume" : "weight";
     if (editingId) {
       setState((current) => ({
