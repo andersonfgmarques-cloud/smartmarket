@@ -15,3 +15,6 @@
 .scanner-modal .modal-actions{margin-top:14px}
 button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:520px){.scanner-modal{padding:17px}.scanner-video{min-height:200px}}
+
+.scanner-status{padding:9px 12px;margin:8px 0;border-radius:8px;background:#eaf6ef;color:#087443;font-size:13px;font-weight:700}
+.scanner-video{object-fit:cover}
