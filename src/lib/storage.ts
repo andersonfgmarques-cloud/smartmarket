@@ -5,7 +5,7 @@ const DB_NAME = "smartmarket-db";
 const STORE = "app-state";
 const STATE_KEY = "current";
 const FALLBACK_KEY = "smartmarket-state";
-const DEFAULT_STATE: ShoppingState = { items: [], budget: 0 };
+const DEFAULT_STATE: ShoppingState = { items: [], budget: 0, purchases: [] };
 const MEASURES: Measure[] = ["un", "kg", "g", "l", "ml"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,7 +38,11 @@ export function normalizeState(value: unknown): ShoppingState {
     ? value.budget
     : 0;
   const items = Array.isArray(value.items) ? value.items.filter(isShoppingItem) : [];
-  return { items, budget };
+  const purchases = Array.isArray(value.purchases) ? value.purchases.filter((entry): entry is ShoppingState["purchases"] extends (infer T)[] | undefined ? T : never => {
+    if (!isRecord(entry)) return false;
+    return typeof entry.id === "string" && typeof entry.purchasedAt === "string" && typeof entry.totalCents === "number" && Number.isFinite(entry.totalCents) && Array.isArray(entry.items) && entry.items.every(isShoppingItem);
+  }) : [];
+  return { items, budget, purchases };
 }
 
 async function database() {
