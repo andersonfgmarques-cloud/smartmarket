@@ -1,5 +1,6 @@
 export type Measure = "un" | "kg" | "g" | "l" | "ml";
 export type ItemKind = "unit" | "weight" | "volume";
+
 export interface ShoppingItem {
   id: string;
   name: string;
@@ -12,7 +13,16 @@ export interface ShoppingItem {
   favorite?: boolean;
   updatedAt: string;
 }
+
+export interface PurchaseRecord {
+  id: string;
+  purchasedAt: string;
+  items: ShoppingItem[];
+  totalCents: number;
+}
+
 export interface ShoppingState {
   items: ShoppingItem[];
   budget: number;
+  purchases?: PurchaseRecord[];
 }
