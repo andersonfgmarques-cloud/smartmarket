@@ -1,0 +1,12 @@
+{
+  "name": "SmartMarket",
+  "short_name": "SmartMarket",
+  "description": "Compras inteligentes, sem surpresas no caixa.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f6",
+  "theme_color": "#087443",
+  "icons": []
+}
