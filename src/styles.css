@@ -158,3 +158,12 @@ button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:520px){
   .scanner-camera-frame{aspect-ratio:4/3;height:min(38dvh,310px);max-height:310px;min-height:190px}
 }
+
+
+/* Alerta de orçamento excedido: destaque explícito em vermelho. */
+.budget-overrun-text{color:#c62828!important}
+.budget-overrun{display:grid;gap:4px;margin-top:12px;padding:11px 12px;border:1px solid #f2b8b5;border-radius:8px;background:#fff1f0;color:#a61b1b;font-size:12px}
+.budget-overrun strong{font-size:13px;color:#b42318}
+.budget-overrun span{line-height:1.45;color:#b42318}
+.budget-progress span{transition:width .2s,background-color .2s}
+.budget-panel:has(.budget-overrun) .budget-progress span{background:#dc2626}
