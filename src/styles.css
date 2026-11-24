@@ -143,3 +143,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
 /* A câmera ocupa toda a moldura no telemóvel, sem faixas laterais.
    O OCR calcula o recorte a partir do enquadramento efetivamente visível. */
 .scanner-camera-frame .scanner-video{object-fit:cover}
+
+
+/* Ação destrutiva da lista, visualmente distinta das ações comuns. */
+.danger-button{border-color:#efc4c4!important;color:#b42318!important;background:#fff7f6!important}
+.danger-button:disabled{opacity:.45}
