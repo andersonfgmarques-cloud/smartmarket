@@ -148,3 +148,13 @@ button:disabled{opacity:.55;cursor:not-allowed}
 /* Ação destrutiva da lista, visualmente distinta das ações comuns. */
 .danger-button{border-color:#efc4c4!important;color:#b42318!important;background:#fff7f6!important}
 .danger-button:disabled{opacity:.45}
+
+
+/* Scanner de etiqueta: moldura compacta e recorte OCR com as mesmas proporções. */
+.scanner-camera-frame{aspect-ratio:4/3;max-height:38dvh;min-height:190px}
+.scanner-camera-frame .scanner-video{width:100%;height:100%;object-fit:cover}
+.scanner-reticle{left:14%;top:30%;width:72%;height:40%;border-width:2px;border-radius:12px;box-shadow:0 0 0 999px #07150d55}
+.scanner-reticle span{bottom:-30px;font-size:11px;padding:5px 10px}
+@media(max-width:520px){
+  .scanner-camera-frame{aspect-ratio:4/3;height:min(38dvh,310px);max-height:310px;min-height:190px}
+}
