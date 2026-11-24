@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Check, ChevronRight, CircleHelp, ShoppingBasket, ShoppingCart, SlidersHorizontal, Wallet, X, FileDown, Plus } from "lucide-react";
+import { ArrowUpRight, Check, ChevronRight, CircleHelp, Clock3, ShoppingBasket, ShoppingCart, SlidersHorizontal, Wallet, X, FileDown, Plus } from "lucide-react";
 import { calculateSubtotal, formatBRL, parseBRLAmount } from "./lib/money";
 import { createItem, loadState, saveState } from "./lib/storage";
 import type { PurchaseRecord, ShoppingState } from "./types";
