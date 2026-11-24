@@ -1,12 +1,15 @@
 const CACHE_PREFIX = "smartmarket-";
-const CACHE_VERSION = "smartmarket-shell-v6";
+const CACHE_VERSION = "smartmarket-shell-v7";
 const BASE_URL = new URL("./", self.registration.scope);
 const MANIFEST_URL = new URL("manifest.webmanifest", BASE_URL);
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_VERSION);
-    const pageResponse = await fetch(BASE_URL.href);
+    // Bypass the previous service worker cache while installing a new version.
+    const refreshUrl = new URL(BASE_URL.href);
+    refreshUrl.searchParams.set("sw-refresh", CACHE_VERSION);
+    const pageResponse = await fetch(refreshUrl.href, { cache: "reload" });
     if (!pageResponse.ok) throw new Error("Não foi possível preparar o SmartMarket para uso offline.");
 
     const html = await pageResponse.clone().text();
