@@ -203,17 +203,25 @@ function App() {
       const renderedHeight = video.videoHeight * displayScale;
       const offsetX = (renderedWidth - bounds.width) / 2;
       const offsetY = (renderedHeight - bounds.height) / 2;
-      const cropX = Math.max(0, Math.round((offsetX + bounds.width * 0.08) / displayScale));
-      const cropY = Math.max(0, Math.round((offsetY + bounds.height * 0.24) / displayScale));
-      const cropWidth = Math.min(video.videoWidth - cropX, Math.round(bounds.width * 0.84 / displayScale));
-      const cropHeight = Math.min(video.videoHeight - cropY, Math.round(bounds.height * 0.52 / displayScale));
+      // Janela compacta alinhada à moldura verde: 14% esquerda, 30% topo, 72% largura e 40% altura.
+      const cropX = Math.max(0, Math.round((offsetX + bounds.width * 0.14) / displayScale));
+      const cropY = Math.max(0, Math.round((offsetY + bounds.height * 0.30) / displayScale));
+      const cropWidth = Math.min(video.videoWidth - cropX, Math.round(bounds.width * 0.72 / displayScale));
+      const cropHeight = Math.min(video.videoHeight - cropY, Math.round(bounds.height * 0.40 / displayScale));
       const canvas = document.createElement("canvas");
-      const scale = Math.min(1.5, 1500 / cropWidth);
+      const scale = Math.min(2.2, 2200 / cropWidth);
       canvas.width = Math.round(cropWidth * scale);
       canvas.height = Math.round(cropHeight * scale);
       const context = canvas.getContext("2d", { willReadFrequently: true });
       if (!context) throw new Error("Não foi possível preparar a imagem da etiqueta.");
       context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      // Mantém uma cópia em tons de cinza para uma segunda tentativa quando o contraste binário falhar.
+      const grayCanvas = document.createElement("canvas");
+      grayCanvas.width = canvas.width;
+      grayCanvas.height = canvas.height;
+      const grayContext = grayCanvas.getContext("2d", { willReadFrequently: true });
+      if (!grayContext) throw new Error("Não foi possível preparar a imagem alternativa da etiqueta.");
+      grayContext.drawImage(canvas, 0, 0);
 
       // Binarização automática de Otsu no recorte, preservando o texto da etiqueta.
       const frame = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -249,8 +257,14 @@ function App() {
         frame.data[i + 2] = value;
       }
       context.putImageData(frame, 0, 0);
-      const result = await ocrWorkerRef.current.recognize(canvas);
-      const reading = extractLabelReading(result.data.text || "", result.data.confidence || 0);
+      let result = await ocrWorkerRef.current.recognize(canvas);
+      let reading = extractLabelReading(result.data.text || "", result.data.confidence || 0);
+      // Segunda tentativa sem binarização: etiquetas térmicas e reflexos podem perder dígitos no Otsu.
+      if (!reading.ok) {
+        result = await ocrWorkerRef.current.recognize(grayCanvas);
+        const grayReading = extractLabelReading(result.data.text || "", result.data.confidence || 0);
+        if (grayReading.ok || (reading.reason === "no-price" && grayReading.reason !== "no-price")) reading = grayReading;
+      }
       if (!reading.ok) {
         const messages = {
           "low-confidence": "A imagem ficou desfocada ou com pouco contraste. Segure o celular firme e aproxime.",
