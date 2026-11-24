@@ -257,14 +257,36 @@ function App() {
         frame.data[i + 2] = value;
       }
       context.putImageData(frame, 0, 0);
-      let result = await ocrWorkerRef.current.recognize(canvas);
-      let reading = extractLabelReading(result.data.text || "", result.data.confidence || 0);
-      // Segunda tentativa sem binarização: etiquetas térmicas e reflexos podem perder dígitos no Otsu.
-      if (!reading.ok) {
-        result = await ocrWorkerRef.current.recognize(grayCanvas);
-        const grayReading = extractLabelReading(result.data.text || "", result.data.confidence || 0);
-        if (grayReading.ok || (reading.reason === "no-price" && grayReading.reason !== "no-price")) reading = grayReading;
+      // Primeiro tenta a imagem original em escala de cinza, com segmentação de bloco de texto.
+      const grayFrame = grayContext.getImageData(0, 0, grayCanvas.width, grayCanvas.height);
+      for (let i = 0; i < grayFrame.data.length; i += 4) {
+        const value = Math.round(grayFrame.data[i] * 0.299 + grayFrame.data[i + 1] * 0.587 + grayFrame.data[i + 2] * 0.114);
+        grayFrame.data[i] = value;
+        grayFrame.data[i + 1] = value;
+        grayFrame.data[i + 2] = value;
       }
+      grayContext.putImageData(grayFrame, 0, 0);
+      await ocrWorkerRef.current.setParameters({
+        tessedit_pageseg_mode: "11",
+        preserve_interword_spaces: "1",
+      });
+      let result = await ocrWorkerRef.current.recognize(grayCanvas);
+      let reading = extractLabelReading(result.data.text || "", result.data.confidence || 0);
+      // Segunda tentativa com segmentação de linha e caracteres monetários priorizados.
+      if (!reading.ok) {
+        await ocrWorkerRef.current.setParameters({
+          tessedit_pageseg_mode: "7",
+          tessedit_char_whitelist: "R$0123456789.,",
+          preserve_interword_spaces: "1",
+        });
+        result = await ocrWorkerRef.current.recognize(canvas);
+        const priceReading = extractLabelReading(result.data.text || "", result.data.confidence || 0);
+        if (priceReading.ok || (reading.reason === "no-price" && priceReading.reason !== "no-price")) reading = priceReading;
+      }
+      await ocrWorkerRef.current.setParameters({
+        tessedit_pageseg_mode: "11",
+        tessedit_char_whitelist: "",
+      });
       if (!reading.ok) {
         const messages = {
           "low-confidence": "A imagem ficou desfocada ou com pouco contraste. Segure o celular firme e aproxime.",
