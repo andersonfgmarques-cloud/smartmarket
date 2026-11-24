@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "smartmarket-";
-const CACHE_VERSION = "smartmarket-shell-v9";
+const CACHE_VERSION = "smartmarket-shell-v10";
 const BASE_URL = new URL("./", self.registration.scope);
 const MANIFEST_URL = new URL("manifest.webmanifest", BASE_URL);
 
