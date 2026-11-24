@@ -267,7 +267,7 @@ function App() {
       }
       grayContext.putImageData(grayFrame, 0, 0);
       await ocrWorkerRef.current.setParameters({
-        tessedit_pageseg_mode: "11",
+        tessedit_pageseg_mode: 11,
         preserve_interword_spaces: "1",
       });
       let result = await ocrWorkerRef.current.recognize(grayCanvas);
@@ -275,7 +275,7 @@ function App() {
       // Segunda tentativa com segmentação de linha e caracteres monetários priorizados.
       if (!reading.ok) {
         await ocrWorkerRef.current.setParameters({
-          tessedit_pageseg_mode: "7",
+          tessedit_pageseg_mode: 7,
           tessedit_char_whitelist: "R$0123456789.,",
           preserve_interword_spaces: "1",
         });
@@ -284,7 +284,7 @@ function App() {
         if (priceReading.ok || (reading.reason === "no-price" && priceReading.reason !== "no-price")) reading = priceReading;
       }
       await ocrWorkerRef.current.setParameters({
-        tessedit_pageseg_mode: "11",
+        tessedit_pageseg_mode: 11,
         tessedit_char_whitelist: "",
       });
       if (!reading.ok) {
